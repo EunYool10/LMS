@@ -51,8 +51,8 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen min-h-screen-dvh flex flex-col bg-neutral-50 text-neutral-900 font-sans antialiased">
-      {/* Top Universal Navbar */}
-      <Navbar currentView={currentView} onNavigate={handleNavigate} />
+      {/* Top Universal Navbar (the classroom has its own header) */}
+      {!isLearnRoute && <Navbar currentView={currentView} onNavigate={handleNavigate} />}
 
       {/* Main Body */}
       <div className="flex-1 flex flex-col min-w-0">

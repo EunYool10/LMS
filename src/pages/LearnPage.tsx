@@ -647,34 +647,19 @@ export const LearnPage: React.FC<LearnPageProps> = ({
   // 1. Loading State Skeleton Loader
   if (isLoading) {
     return (
-      <div className="bg-slate-100 min-h-[calc(100vh-4rem)] pb-16 animate-pulse">
-        {/* Top bar skeleton */}
-        <div className="bg-slate-900 h-14 w-full flex items-center justify-between px-6">
-          <div className="h-5 w-48 bg-slate-800 rounded" />
-          <div className="h-5 w-24 bg-slate-800 rounded" />
+      <div className="min-h-screen-dvh animate-pulse bg-neutral-50">
+        <div className="flex h-14 items-center gap-3 border-b border-neutral-200 bg-white px-5">
+          <div className="h-5 w-5 rounded bg-neutral-200" />
+          <div className="h-4 w-56 rounded bg-neutral-200" />
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-8 space-y-6">
-              {/* 16:9 Video skeleton */}
-              <div className="aspect-video w-full bg-slate-800 rounded-2xl flex items-center justify-center">
-                <Film className="w-12 h-12 text-slate-700 animate-pulse" />
-              </div>
-              <div className="bg-white rounded-2xl h-48 p-6 space-y-3">
-                <div className="h-6 w-1/3 bg-slate-200 rounded" />
-                <div className="h-4 w-3/4 bg-slate-100 rounded" />
-                <div className="h-4 w-1/2 bg-slate-100 rounded" />
-              </div>
+        <div className="mx-auto grid max-w-[1440px] gap-6 px-0 sm:px-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:py-5">
+          <div className="space-y-4">
+            <div className="flex aspect-video items-center justify-center bg-neutral-900 sm:rounded-xl">
+              <Film className="h-10 w-10 text-neutral-700" />
             </div>
-            <div className="lg:col-span-4 bg-white rounded-2xl h-96 p-4 space-y-3">
-              <div className="h-5 w-1/2 bg-slate-200 rounded" />
-              <div className="space-y-2 pt-4">
-                <div className="h-10 bg-slate-100 rounded-xl" />
-                <div className="h-10 bg-slate-100 rounded-xl" />
-                <div className="h-10 bg-slate-100 rounded-xl" />
-              </div>
-            </div>
+            <div className="h-28 border-y border-neutral-200 bg-white sm:rounded-xl sm:border" />
           </div>
+          <div className="h-96 border-y border-neutral-200 bg-white sm:rounded-xl sm:border" />
         </div>
       </div>
     );
@@ -730,64 +715,84 @@ export const LearnPage: React.FC<LearnPageProps> = ({
     );
   }
 
+  const threshold = activeLesson?.completionThresholdPercent ?? course?.completionThresholdPercent ?? 80;
+  const isPrivileged = isAdminRole(user?.role);
+  const totalSecForGate = effectiveLessonDuration > 0 ? effectiveLessonDuration : 60;
+  const currentWatchedPercent = Math.min(100, Math.round((currentVideoTime / totalSecForGate) * 100));
+  const isLessonDone = !!activeLessonProgress?.isCompleted;
+  const isEligible = isLessonDone || isPrivileged || (activeLesson?.type !== 'video' ? true : currentWatchedPercent >= threshold);
+
+  const courseNotices: CourseAnnouncement[] =
+    courseAnnouncements.length > 0
+      ? courseAnnouncements
+      : course?.notice && course.notice.trim() !== ''
+      ? [
+          {
+            id: 'notice_fallback',
+            courseId,
+            title: '강의 공지',
+            content: course.notice,
+            authorName: course.instructorName || 'TDSN 아카데미',
+            authorRole: 'CONTENT_MANAGER',
+            createdAt: course.updatedAt || course.createdAt,
+          } as CourseAnnouncement,
+        ]
+      : [];
+
+  const tabs = [
+    { id: 'overview' as const, label: '강의 개요', icon: Info },
+    { id: 'notes' as const, label: '학습 메모', icon: StickyNote },
+    { id: 'qa' as const, label: `질문 ${qaList.length > 0 ? qaList.length : ''}`.trim(), icon: MessageSquare },
+  ];
+
   return (
-    <div className="bg-slate-100 min-h-[calc(100vh-4rem)] pb-16">
-      {/* Top Classroom Bar */}
-      <div className="bg-slate-900 text-white border-b border-slate-800 sticky top-16 z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => onNavigate('course-detail', courseId)}
-              className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer shrink-0"
-              title="강의 상세로 돌아가기"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-xs sm:text-sm font-bold text-white truncate">{course.title}</h1>
-              <div className="text-[11px] text-slate-400 truncate hidden sm:block">
-                현재 학습 중: {activeLesson?.title || '강의 콘텐츠 준비 중'}
-              </div>
-            </div>
+    <div className="min-h-screen-dvh bg-neutral-50 pb-16">
+      {/* ── Classroom header (replaces the global navbar on this screen) ── */}
+      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white">
+        <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
+          <button
+            type="button"
+            onClick={() => onNavigate('course-detail', courseId)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 cursor-pointer"
+            title="강의 상세로 돌아가기"
+            aria-label="강의 상세로 돌아가기"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-semibold text-neutral-900">{course.title}</h1>
+            <p className="hidden truncate text-xs text-neutral-500 sm:block">{activeLesson?.title || '강의 콘텐츠 준비 중'}</p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {isAllLessonsCompleted && (
-              <button
-                type="button"
-                onClick={() => setShowCompletionModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400/20 via-yellow-400/20 to-indigo-400/20 border border-amber-400/50 text-amber-300 hover:text-white text-xs font-bold hover:bg-amber-400/30 transition-all cursor-pointer shadow-xs animate-pulse-subtle"
-                title="수료증 및 완주 축하 확인"
-              >
-                <Trophy className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                <span className="hidden xs:inline">수료증 확인</span>
-                <span className="xs:hidden">수료증</span>
-              </button>
-            )}
+          {isAllLessonsCompleted && (
+            <button
+              type="button"
+              onClick={() => setShowCompletionModal(true)}
+              className="lms-btn lms-btn-secondary lms-btn-sm shrink-0 border-amber-300 text-amber-700"
+              title="수료증 확인"
+            >
+              <Trophy className="h-4 w-4" />
+              <span className="hidden xs:inline">수료증</span>
+            </button>
+          )}
 
-            <div className="hidden md:flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-[11px] text-slate-400">전체 학습 진도율</div>
-                <div className="text-xs font-bold text-indigo-400 tabular-nums">{progressPercentage}%</div>
-              </div>
-              <div className="w-24">
-                <ProgressBar progress={progressPercentage} size="sm" variant="indigo" />
-              </div>
+          <div className="hidden shrink-0 items-center gap-3 md:flex">
+            <span className="text-xs text-neutral-500">
+              진도 <strong className="font-semibold tabular-nums text-neutral-900">{progressPercentage}%</strong>
+            </span>
+            <div className="w-28">
+              <ProgressBar progress={progressPercentage} size="sm" variant={progressPercentage >= 100 ? 'emerald' : 'indigo'} />
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Classroom Split Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Main Content Column (Video or Quiz) */}
-          <div className="lg:col-span-8 space-y-6">
+      <div className="mx-auto grid max-w-[1440px] gap-6 px-0 sm:px-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:py-5">
+        {/* ── Main column ── */}
+        <div className="min-w-0 space-y-4">
+          <div className="overflow-hidden bg-neutral-950 sm:rounded-xl">
             {!activeLesson ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-xs text-slate-500">
-                등록된 강의 콘텐츠가 없습니다.
-              </div>
+              <div className="flex aspect-video items-center justify-center text-sm text-neutral-400">등록된 강의 콘텐츠가 없습니다.</div>
             ) : activeLesson.type === 'video' ? (
               <VideoPlayer
                 key={activeLesson.id}
@@ -807,627 +812,421 @@ export const LearnPage: React.FC<LearnPageProps> = ({
                 onAutoPlayChange={handleAutoPlayChange}
               />
             ) : (
-              <QuizViewer
-                lesson={activeLesson}
-                questions={activeQuestions}
-                examConfig={activeExamConfig}
-                onCompleted={() => {
-                  if (user) {
-                    storage.updateLessonPlayback(user.id, courseId, activeLesson.id, 0, 0, true);
-                    setProgressVersion((v) => v + 1);
-                  }
-                }}
-                onNextLesson={handleNext}
-                hasNextLesson={hasNext}
-              />
+              <div className="bg-white">
+                <QuizViewer
+                  lesson={activeLesson}
+                  questions={activeQuestions}
+                  examConfig={activeExamConfig}
+                  onCompleted={() => {
+                    if (user) {
+                      storage.updateLessonPlayback(user.id, courseId, activeLesson.id, 0, 0, true);
+                      setProgressVersion((v) => v + 1);
+                    }
+                  }}
+                  onNextLesson={handleNext}
+                  hasNextLesson={hasNext}
+                />
+              </div>
             )}
+          </div>
 
-            {/* Requirement 3: Visual Progress Bar beneath Video Player & Requirement 2: Mark as Completed Action Bar */}
-            {activeLesson && (
-              <div
-                id="lesson-playback-bar"
-                className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4"
-              >
-                {/* Top Info & Action Buttons Row */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-sm sm:max-w-md">
-                        {activeLesson.title}
+          {activeLesson && (
+            <section id="lesson-playback-bar" className="border-y border-neutral-200 bg-white px-4 py-4 sm:rounded-xl sm:border sm:px-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-base font-semibold text-neutral-900">{activeLesson.title}</h2>
+                    {isLessonDone && (
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        완료
                       </span>
-                      {activeLessonProgress?.isCompleted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>학습 완료됨</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          <span>학습 진행 중</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                      <span>
-                        재생 진도:{' '}
-                        <strong className="text-indigo-600 font-bold tabular-nums">
-                          {playbackPercentage}%
-                        </strong>
-                      </span>
-                      {effectiveLessonDuration > 0 && (
-                        <>
-                          <span className="text-slate-300">•</span>
-                          <span className="font-mono text-slate-600">
-                            {formatPlayerTime(currentVideoTime)} / {formatPlayerTime(effectiveLessonDuration)}
-                          </span>
-                        </>
-                      )}
-                      {hasNext && (
-                        <>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-[10px] text-amber-600 font-medium">
-                            95% 도달 시 다음 강의 자동 이동
-                          </span>
-                        </>
-                      )}
-                    </div>
+                    )}
                   </div>
+                  <p className="text-xs text-neutral-500">
+                    {effectiveLessonDuration > 0 && (
+                      <span className="font-mono tabular-nums">
+                        {formatPlayerTime(currentVideoTime)} / {formatPlayerTime(effectiveLessonDuration)}
+                      </span>
+                    )}
+                    {effectiveLessonDuration > 0 && <span className="mx-1.5 text-neutral-300">·</span>}
+                    {activeLesson.type === 'video' ? `${threshold}% 이상 시청하면 완료할 수 있어요` : '문제를 풀고 제출하면 완료됩니다'}
+                  </p>
+                </div>
 
-                  {/* Actions: Autoplay setting, Mark as Completed & Prev/Next Buttons */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    id="autoplay-toggle-btn"
+                    role="switch"
+                    aria-checked={autoPlayEnabled}
+                    onClick={() => {
+                      const nextVal = !autoPlayEnabled;
+                      handleAutoPlayChange(nextVal);
+                      showToast(
+                        nextVal ? '다음 강의로 이동 시 영상이 자동으로 재생됩니다.' : '다음 강의 자동 재생이 해제되었습니다.',
+                        'info',
+                        '자동 재생 설정'
+                      );
+                    }}
+                    className="inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer"
+                    title="다음 강의 자동 재생"
+                  >
+                    <span className={`relative h-4 w-7 rounded-full transition-colors ${autoPlayEnabled ? 'bg-brand-600' : 'bg-neutral-300'}`}>
+                      <span
+                        className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${autoPlayEnabled ? 'left-3.5' : 'left-0.5'}`}
+                      />
+                    </span>
+                    자동재생
+                  </button>
+
+                  <button
+                    type="button"
+                    id="mark-as-completed-btn"
+                    data-testid="mark-as-completed-btn"
+                    aria-label="Mark as Completed"
+                    onClick={handleMarkAsCompleted}
+                    disabled={isMarkingCompleted || (!isEligible && !isLessonDone)}
+                    className={`lms-btn lms-btn-sm ${
+                      isLessonDone
+                        ? 'lms-btn-secondary border-emerald-300 text-emerald-700'
+                        : isEligible
+                        ? 'lms-btn-primary'
+                        : 'lms-btn-secondary text-neutral-400'
+                    }`}
+                    title={
+                      isLessonDone
+                        ? '학습이 완료된 강의입니다. (클릭 시 다시 저장)'
+                        : !isEligible
+                        ? `최소 학습 기준(${threshold}%) 이상 시청해야 완료할 수 있습니다. (현재 ${currentWatchedPercent}%)`
+                        : '이 강의를 완료 상태로 저장합니다'
+                    }
+                  >
+                    {isMarkingCompleted ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        저장 중…
+                      </>
+                    ) : isLessonDone ? (
+                      <>
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        학습 완료됨
+                      </>
+                    ) : isEligible ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        학습 완료
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5" />
+                        {threshold}% 시청 후 완료
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex overflow-hidden rounded-lg border border-neutral-300">
                     <button
                       type="button"
-                      id="autoplay-toggle-btn"
-                      onClick={() => {
-                        const nextVal = !autoPlayEnabled;
-                        handleAutoPlayChange(nextVal);
-                        showToast(
-                          nextVal
-                            ? '다음 강의로 이동 시 영상이 자동으로 재생됩니다.'
-                            : '다음 강의 자동 재생이 해제되었습니다.',
-                          'info',
-                          '자동 재생 설정'
-                        );
-                      }}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                        autoPlayEnabled
-                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs hover:bg-indigo-100'
-                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
-                      }`}
-                      title={autoPlayEnabled ? '다음 강의 자동 재생 켜짐 (클릭하여 끄기)' : '다음 강의 자동 재생 꺼짐 (클릭하여 켜기)'}
+                      onClick={handlePrev}
+                      disabled={!hasPrev}
+                      className="flex h-8 items-center gap-1 px-2.5 text-[13px] font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                      title="이전 강의"
+                      aria-label="이전 강의"
                     >
-                      <FastForward className={`w-3.5 h-3.5 ${autoPlayEnabled ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span className="hidden sm:inline">다음 강의 자동재생</span>
-                      <span className="font-bold">{autoPlayEnabled ? 'ON' : 'OFF'}</span>
+                      <ChevronLeft className="h-4 w-4" />
+                      <span className="hidden sm:inline">이전</span>
                     </button>
-
-                    {(() => {
-                      const threshold =
-                        activeLesson?.completionThresholdPercent ?? course?.completionThresholdPercent ?? 80;
-                      const isPrivileged = isAdminRole(user?.role);
-                      const totalSec = effectiveLessonDuration > 0 ? effectiveLessonDuration : 60;
-                      const currentWatchedPercent = Math.min(100, Math.round((currentVideoTime / totalSec) * 100));
-                      const isEligible =
-                        activeLessonProgress?.isCompleted ||
-                        isPrivileged ||
-                        (activeLesson?.type !== 'video' ? true : currentWatchedPercent >= threshold);
-
-                      return (
-                        <button
-                          type="button"
-                          id="mark-as-completed-btn"
-                          data-testid="mark-as-completed-btn"
-                          aria-label="Mark as Completed"
-                          onClick={handleMarkAsCompleted}
-                          disabled={isMarkingCompleted || (!isEligible && !activeLessonProgress?.isCompleted)}
-                          className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
-                            activeLessonProgress?.isCompleted
-                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 cursor-pointer'
-                              : isEligible
-                              ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 cursor-pointer'
-                              : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-90'
-                          }`}
-                          title={
-                            activeLessonProgress?.isCompleted
-                              ? '학습이 완료된 강의입니다. (클릭 시 다시 저장)'
-                              : !isEligible
-                              ? `강사가 설정한 최소 학습 기준(${threshold}%) 이상 수강해야 완료 처리할 수 있습니다. (현재 시청률: ${currentWatchedPercent}%)`
-                              : '이 강의를 완료 상태로 변경하고 서버에 저장합니다'
-                          }
-                        >
-                          {isMarkingCompleted ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>저장 중...</span>
-                            </>
-                          ) : activeLessonProgress?.isCompleted ? (
-                            <>
-                              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>학습 완료됨</span>
-                            </>
-                          ) : isEligible ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>학습 완료로 표시</span>
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3.5 h-3.5 text-slate-400" />
-                              <span>학습 완료 ({threshold}% 이상 시청 필요)</span>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })()}
-
-                    {/* Navigation Prev & Next */}
-                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                      <button
-                        type="button"
-                        onClick={handlePrev}
-                        disabled={!hasPrev}
-                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                        title="이전 강의"
-                        aria-label="이전 강의"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <div className="w-px h-4 bg-slate-200" />
-                      <button
-                        type="button"
-                        onClick={handleNext}
-                        disabled={!hasNext}
-                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                        title="다음 강의"
-                        aria-label="다음 강의"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <span className="w-px bg-neutral-300" />
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={!hasNext}
+                      className="flex h-8 items-center gap-1 px-2.5 text-[13px] font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                      title="다음 강의"
+                      aria-label="다음 강의"
+                    >
+                      <span className="hidden sm:inline">다음</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
+              </div>
 
-                {/* Visual Progress Bar beneath Video Player */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                    <span className="flex items-center gap-1.5">
-                      <span>영상 시청 진도율</span>
-                      {hasNext && (
-                        <span className="text-[10px] text-amber-600 font-normal">
-                          (95% 이상 시 다음 강의 자동 이동)
-                        </span>
-                      )}
-                    </span>
-                    <span id="playback-percentage-val" className="font-bold text-indigo-600 tabular-nums text-sm">
-                      {playbackPercentage}%
-                    </span>
-                  </div>
-
+              <div className="mt-4 flex items-center gap-3">
+                <div
+                  id="video-playback-progress-track"
+                  className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100"
+                  role="progressbar"
+                  aria-valuenow={playbackPercentage}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="영상 시청 진도율"
+                >
                   <div
-                    id="video-playback-progress-track"
-                    className="relative w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200/80 shadow-inner"
-                  >
-                    <div
-                      id="video-playback-progress-bar"
-                      className={`h-full transition-all duration-300 ease-out rounded-full ${
-                        playbackPercentage >= 95 || activeLessonProgress?.isCompleted
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                          : 'bg-gradient-to-r from-indigo-500 to-indigo-600'
-                      }`}
-                      style={{ width: `${Math.max(0, Math.min(100, playbackPercentage))}%` }}
-                    />
-                    {/* 95% Auto-advance indicator tick */}
-                    {hasNext && (
-                      <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-10"
-                        style={{ left: '95%' }}
-                        title="95% 자동 이동 지점"
-                      />
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium px-0.5">
-                    <span>0%</span>
-                    {hasNext && (
-                      <span className="text-amber-600 font-bold">
-                        ▲ 95% 도달 시 다음 강의 자동 이동
-                      </span>
-                    )}
-                    <span>100%</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Bottom Tabs: Overview, Notes, Q&A */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="flex border-b border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('overview')}
-                  className={`flex items-center gap-2 py-3 px-5 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
-                    activeTab === 'overview'
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Info className="w-4 h-4" />
-                  <span>강의 개요</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('notes')}
-                  className={`flex items-center gap-2 py-3 px-5 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
-                    activeTab === 'notes'
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <StickyNote className="w-4 h-4" />
-                  <span>학습 메모</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('qa')}
-                  className={`flex items-center gap-2 py-3 px-5 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
-                    activeTab === 'qa'
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>질문 & 토론 ({qaList.length})</span>
-                </button>
-              </div>
-
-              <div className="p-6">
-                {activeTab === 'overview' && (
-                  <div className="space-y-4 text-xs sm:text-sm text-slate-700">
-                    {/* Course Official Announcement Banner - Only rendered if registered by admin/instructor */}
-                    {courseAnnouncements.length > 0 ? (
-                      <div className="space-y-3">
-                        {courseAnnouncements.map((ann) => (
-                          <div
-                            key={ann.id}
-                            className="bg-gradient-to-r from-indigo-50/95 via-sky-50/70 to-slate-50 border border-indigo-200/90 rounded-2xl p-4 flex items-start gap-3 shadow-2xs"
-                          >
-                            <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs shrink-0 mt-0.5">
-                              <Megaphone className="w-4 h-4" />
-                            </div>
-                            <div className="space-y-1 min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                <span className="bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-md text-[10px] shrink-0">
-                                  강의 공식 공지
-                                </span>
-                                {ann.isPinned && (
-                                  <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md text-[10px] shrink-0">
-                                    중요
-                                  </span>
-                                )}
-                                <span className="text-xs font-bold text-slate-900 truncate">
-                                  {ann.title}
-                                </span>
-                                <span className="text-[11px] text-slate-400">
-                                  {new Date(ann.createdAt).toLocaleDateString('ko-KR')}
-                                </span>
-                                <VerifiedBadge role={ann.authorRole} size="xs" showLabel className="shrink-0" />
-                              </div>
-                              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
-                                {ann.content}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : course?.notice && course.notice.trim() !== '' ? (
-                      <div className="bg-gradient-to-r from-indigo-50/95 via-sky-50/70 to-slate-50 border border-indigo-200/90 rounded-2xl p-4 flex items-start gap-3 shadow-2xs">
-                        <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs shrink-0 mt-0.5">
-                          <Megaphone className="w-4 h-4" />
-                        </div>
-                        <div className="space-y-1 min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-md text-[10px] shrink-0">
-                              강의 공지
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 truncate">
-                              {course.instructorName || 'TDSN 아카데미 공식 강사진'}
-                            </span>
-                            <VerifiedBadge role="INSTRUCTOR" size="xs" showLabel className="shrink-0" />
-                          </div>
-                          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
-                            {course.notice}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-4 flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-slate-200 text-slate-500 shrink-0">
-                          <Megaphone className="w-4 h-4" />
-                        </div>
-                        <div className="space-y-0.5">
-                          <h4 className="text-xs font-bold text-slate-700">등록된 강의 공지사항이 없습니다.</h4>
-                          <p className="text-[11px] text-slate-500">
-                            관리자 또는 강사가 등록한 공지사항이 있을 경우 이곳에 표시됩니다.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <h3 className="text-base font-bold text-slate-900">{activeLesson?.title || '강의'}</h3>
-                    <p className="leading-relaxed text-slate-600">
-                      {activeLesson?.contentSummary ||
-                        '이 강의의 상세 안내 및 설명이 등록되어 있지 않습니다.'}
-                    </p>
-
-                    {activeLesson && (
-                      <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-4 text-xs">
-                        <div>
-                          <span className="font-semibold text-slate-500">강의 유형: </span>
-                          <span className="text-slate-900 font-bold">
-                            {activeLesson.type === 'video'
-                              ? '동영상 강의'
-                              : activeLesson.type === 'quiz'
-                              ? '이해도 점검 퀴즈'
-                              : '종합 역량 평가'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-500">시간: </span>
-                          <span className="text-slate-900 font-bold">
-                            {formatDuration(activeLesson.durationSeconds, activeLesson.durationStatus)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'notes' && (
-                  <NotesTab
-                    courseId={courseId}
-                    lessonId={activeLesson?.id || ''}
-                    currentVideoTime={currentVideoTime}
+                    id="video-playback-progress-bar"
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      playbackPercentage >= 95 || isLessonDone ? 'bg-emerald-500' : 'bg-brand-600'
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, playbackPercentage))}%` }}
                   />
-                )}
-
-                {activeTab === 'qa' && (
-                  <div className="space-y-4">
-                    {/* Q&A Form */}
-                    <form onSubmit={handleAddQuestion} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newQuestionText}
-                        onChange={(e) => setNewQuestionText(e.target.value)}
-                        placeholder="강의 내용이나 궁금한 점을 질문해보세요..."
-                        className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <button
-                        type="submit"
-                        className="py-2 px-4 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>등록</span>
-                      </button>
-                    </form>
-
-                    {/* Q&A list */}
-                    {qaList.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-slate-400">
-                        아직 등록된 질문이 없습니다. 첫 질문을 남겨보세요.
-                      </div>
-                    ) : (
-                      <div className="space-y-3 pt-2">
-                        {qaList.map((qa) => {
-                          const authorUser = qa.userId ? storage.getUser(qa.userId) : null;
-                          const role =
-                            qa.userRole ||
-                            authorUser?.role ||
-                            (qa.author.includes('운영') || qa.author.includes('관리자') || qa.author.includes('TDSN')
-                              ? 'SUPER_ADMIN'
-                              : qa.author.includes('강사')
-                              ? 'INSTRUCTOR'
-                              : undefined);
-                          const isVerified = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'INSTRUCTOR';
-
-                          return (
-                            <div
-                              key={qa.id}
-                              className={`p-3.5 rounded-xl border text-xs space-y-2 transition-all ${
-                                qa.isNotice
-                                  ? 'bg-gradient-to-r from-indigo-50/95 via-sky-50/70 to-slate-50 border-indigo-200/90 shadow-2xs'
-                                  : 'bg-slate-50/80 border-slate-200'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPreviewUser({
-                                      userId: qa.userId || '',
-                                      fallbackData: {
-                                        name: qa.author,
-                                        avatar: qa.userAvatar,
-                                        role: role as UserRole,
-                                        nickname: authorUser?.nickname,
-                                      },
-                                    });
-                                  }}
-                                  className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap group text-left cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg p-0.5 -m-0.5 transition-colors"
-                                  aria-label={`${qa.author} 프로필 요약 보기`}
-                                >
-                                  <div className="transition-transform duration-200 group-hover:scale-105 shrink-0">
-                                    <Avatar
-                                      user={authorUser}
-                                      name={qa.author}
-                                      src={qa.userAvatar}
-                                      size="xs"
-                                      showVerifiedBadge
-                                    />
-                                  </div>
-                                  <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[130px] sm:max-w-[180px]">
-                                    {qa.author}
-                                  </span>
-                                  {authorUser?.nickname && (
-                                    <span className="text-[10px] text-slate-400 font-mono hidden sm:inline group-hover:text-indigo-500 transition-colors">
-                                      {authorUser.nickname}
-                                    </span>
-                                  )}
-                                  {isVerified && (
-                                    <VerifiedBadge role={role} size="xs" showLabel className="shrink-0" />
-                                  )}
-                                  {qa.isNotice && (
-                                    <span className="bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px] shrink-0">
-                                      공지
-                                    </span>
-                                  )}
-                                </button>
-                                <span className="text-[11px] text-slate-400 font-medium shrink-0">{qa.time}</span>
-                              </div>
-                              <p className="text-slate-700 leading-relaxed pl-8 whitespace-pre-wrap">{qa.text}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Curriculum Drawer Column */}
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden sticky top-36">
-            {/* Celebratory Banner when all lessons are completed */}
-            {isAllLessonsCompleted && (
-              <div className="p-3.5 bg-gradient-to-r from-amber-500 via-amber-600 to-indigo-600 text-white flex items-center justify-between gap-2 shadow-xs border-b border-amber-400/30">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="p-1 rounded-lg bg-white/20 shrink-0">
-                    <Trophy className="w-4 h-4 text-amber-200 animate-trophy-bounce" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black leading-tight">100% 전 과정 완주 달성!</div>
-                    <div className="text-[10px] text-amber-100 truncate">모든 레슨을 성공적으로 완료했습니다</div>
-                  </div>
+                  {activeLesson.type === 'video' && !isLessonDone && (
+                    <div
+                      className="absolute inset-y-0 w-0.5 bg-neutral-400"
+                      style={{ left: `${threshold}%` }}
+                      title={`완료 기준 ${threshold}%`}
+                    />
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCompletionModal(true)}
-                  className="px-2.5 py-1 bg-white text-slate-900 hover:bg-amber-50 rounded-lg text-[11px] font-bold shrink-0 transition-colors cursor-pointer shadow-xs"
-                >
-                  축하 메시지
-                </button>
+                <span id="playback-percentage-val" className="w-10 text-right text-xs font-semibold tabular-nums text-neutral-700">
+                  {playbackPercentage}%
+                </span>
               </div>
-            )}
+              {hasNext && autoPlayEnabled && (
+                <p className="mt-2 text-xs text-neutral-500">95%까지 시청하면 다음 강의로 자동 이동합니다.</p>
+              )}
+            </section>
+          )}
 
-            <div className="p-4 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-indigo-600" />
-                <span>커리큘럼</span>
-              </h3>
-              <span className={`text-[11px] font-medium ${isAllLessonsCompleted ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}>
-                {completedLessonsCount} / {lessons.length} 완료
-              </span>
+          {/* Tabs */}
+          <section className="border-y border-neutral-200 bg-white sm:rounded-xl sm:border">
+            <div role="tablist" className="flex gap-1 border-b border-neutral-200 px-2 sm:px-3">
+              {tabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === id}
+                  onClick={() => setActiveTab(id)}
+                  className={`relative flex items-center gap-1.5 px-3 py-3 text-sm font-medium cursor-pointer ${
+                    activeTab === id ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                  {activeTab === id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-neutral-900" />}
+                </button>
+              ))}
             </div>
 
-            <div className="max-h-[calc(100vh-16rem)] overflow-y-auto divide-y divide-slate-100">
-              {sections.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-400">등록된 섹션이 없습니다.</div>
-              ) : (
-                sections.map((section, secIdx) => {
-                  const secLessons = lessons.filter((l) => l.sectionId === section.id).sort((a, b) => a.order - b.order);
-                  const isExpanded = !!expandedSections[section.id];
-
-                  return (
-                    <div key={section.id}>
-                      {/* Section Header */}
-                      <button
-                        type="button"
-                        onClick={() => toggleSection(section.id)}
-                        className="w-full p-3.5 bg-slate-50/50 hover:bg-slate-100/60 flex items-center justify-between text-left transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[11px] font-bold text-indigo-600 shrink-0">섹션 {secIdx + 1}</span>
-                          <span className="text-xs font-bold text-slate-900 truncate">{section.title}</span>
+            <div className="p-4 sm:p-5">
+              {activeTab === 'overview' && (
+                <div className="space-y-5">
+                  {courseNotices.map((ann) => (
+                    <div key={ann.id} className="flex gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                      <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-semibold text-neutral-900">{ann.title}</span>
+                          {ann.isPinned && <span className="text-xs font-medium text-amber-700">중요</span>}
+                          <span className="text-xs text-neutral-400">{new Date(ann.createdAt).toLocaleDateString('ko-KR')}</span>
                         </div>
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                        )}
-                      </button>
-
-                      {/* Lessons list */}
-                      {isExpanded && (
-                        <div className="divide-y divide-slate-50 bg-white">
-                          {secLessons.length === 0 ? (
-                            <div className="p-3 text-center text-xs text-slate-400">등록된 강의가 없습니다.</div>
-                          ) : (
-                            secLessons.map((lesson) => {
-                              const isActive = lesson.id === activeLesson?.id;
-                              const progressItem = progressList.find((p) => p.lessonId === lesson.id);
-                              const isDone = progressItem?.isCompleted;
-                              const isUnlocked = isLessonUnlocked(lesson);
-
-                              return (
-                                <button
-                                  key={lesson.id}
-                                  type="button"
-                                  onClick={() => handleSelectLesson(lesson)}
-                                  className={`w-full p-3 px-4 flex items-center justify-between gap-2.5 text-left transition-all cursor-pointer ${
-                                    isActive
-                                      ? 'bg-indigo-50/90 text-indigo-950 font-bold border-l-4 border-indigo-600'
-                                      : !isUnlocked
-                                      ? 'opacity-60 bg-slate-50/50 hover:bg-slate-100/50 text-slate-500'
-                                      : 'hover:bg-slate-50 text-slate-700'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="shrink-0">
-                                      {isDone ? (
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                      ) : !isUnlocked ? (
-                                        <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                      ) : (
-                                        <div
-                                          className={`w-4 h-4 rounded-full border-2 ${
-                                            isActive ? 'border-indigo-600 bg-indigo-600/20' : 'border-slate-300'
-                                          }`}
-                                        />
-                                      )}
-                                    </div>
-                                    <span className="text-xs truncate">{lesson.title}</span>
-                                  </div>
-
-                                  <div className="shrink-0 text-[11px] text-slate-400">
-                                    {lesson.type === 'video' && (
-                                      <span className="font-mono">
-                                        {formatDuration(lesson.durationSeconds, lesson.durationStatus)}
-                                      </span>
-                                    )}
-                                    {(lesson.type === 'quiz' || lesson.type === 'exam') && (
-                                      <span className="text-indigo-600 font-semibold text-[10px]">
-                                        {lesson.type === 'exam' ? '시험' : '퀴즈'}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-neutral-700">{ann.content}</p>
+                      </div>
                     </div>
-                  );
-                })
+                  ))}
+
+                  <div>
+                    <h3 className="text-base font-semibold text-neutral-900">{activeLesson?.title || '강의'}</h3>
+                    <p className="mt-2 whitespace-pre-line text-sm leading-7 text-neutral-600">
+                      {activeLesson?.contentSummary || '이 강의에 등록된 설명이 없습니다.'}
+                    </p>
+                  </div>
+
+                  {activeLesson && (
+                    <dl className="grid grid-cols-2 gap-4 border-t border-neutral-100 pt-4 text-sm sm:grid-cols-3">
+                      <div>
+                        <dt className="text-xs text-neutral-500">유형</dt>
+                        <dd className="mt-0.5 font-medium text-neutral-900">
+                          {activeLesson.type === 'video' ? '동영상 강의' : activeLesson.type === 'quiz' ? '이해도 점검 퀴즈' : '종합 평가'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-neutral-500">시간</dt>
+                        <dd className="mt-0.5 font-medium text-neutral-900">
+                          {formatDuration(activeLesson.durationSeconds, activeLesson.durationStatus)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-neutral-500">완료 기준</dt>
+                        <dd className="mt-0.5 font-medium text-neutral-900">{threshold}% 시청</dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'notes' && (
+                <NotesTab courseId={courseId} lessonId={activeLesson?.id || ''} currentVideoTime={currentVideoTime} />
+              )}
+
+              {activeTab === 'qa' && (
+                <div className="space-y-4">
+                  <form onSubmit={handleAddQuestion} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      placeholder="강의 내용에 대해 궁금한 점을 남겨 주세요"
+                      className="lms-input flex-1"
+                    />
+                    <button type="submit" className="lms-btn lms-btn-primary shrink-0">
+                      <Send className="h-4 w-4" />
+                      등록
+                    </button>
+                  </form>
+
+                  {qaList.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-neutral-500">아직 등록된 질문이 없습니다.</p>
+                  ) : (
+                    <ul className="divide-y divide-neutral-100">
+                      {qaList.map((qa) => {
+                        const authorUser = qa.userId ? storage.getUser(qa.userId) : null;
+                        const role =
+                          qa.userRole ||
+                          authorUser?.role ||
+                          (qa.author.includes('운영') || qa.author.includes('관리자') || qa.author.includes('TDSN')
+                            ? 'SUPER_ADMIN'
+                            : qa.author.includes('강사')
+                            ? 'INSTRUCTOR'
+                            : undefined);
+                        const isVerified = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'INSTRUCTOR';
+                        return (
+                          <li key={qa.id} className="py-3.5 first:pt-0 last:pb-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewUser({
+                                    userId: qa.userId || '',
+                                    fallbackData: { name: qa.author, avatar: qa.userAvatar, role: role as UserRole, nickname: authorUser?.nickname },
+                                  })
+                                }
+                                className="flex min-w-0 items-center gap-2 rounded-md text-left cursor-pointer group"
+                                aria-label={`${qa.author} 프로필 보기`}
+                              >
+                                <Avatar user={authorUser} name={qa.author} src={qa.userAvatar} size="xs" showVerifiedBadge={false} />
+                                <span className="truncate text-sm font-medium text-neutral-900 group-hover:text-brand-700">{qa.author}</span>
+                                {isVerified && <VerifiedBadge role={role} size="xs" className="shrink-0" />}
+                                {qa.isNotice && <span className="text-xs font-medium text-brand-700">공지</span>}
+                              </button>
+                              <span className="shrink-0 text-xs text-neutral-400">{qa.time}</span>
+                            </div>
+                            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{qa.text}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
+
+        {/* ── Curriculum ── */}
+        <aside className="self-start border-y border-neutral-200 bg-white sm:rounded-xl sm:border lg:sticky lg:top-[76px]">
+          {isAllLessonsCompleted && (
+            <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-emerald-50 px-4 py-3">
+              <span className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+                <Trophy className="h-4 w-4" />
+                모든 강의를 완료했어요
+              </span>
+              <button type="button" onClick={() => setShowCompletionModal(true)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                수료 확인
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+              <BookOpen className="h-4 w-4 text-neutral-500" />
+              커리큘럼
+            </h3>
+            <span className={`text-xs tabular-nums ${isAllLessonsCompleted ? 'font-semibold text-emerald-700' : 'text-neutral-500'}`}>
+              {completedLessonsCount} / {lessons.length} 완료
+            </span>
+          </div>
+
+          <div className="max-h-none overflow-y-auto lg:max-h-[calc(100dvh-160px)]">
+            {sections.length === 0 ? (
+              <p className="p-6 text-center text-sm text-neutral-400">등록된 섹션이 없습니다.</p>
+            ) : (
+              sections.map((section, secIdx) => {
+                const secLessons = lessons.filter((l) => l.sectionId === section.id).sort((a, b) => a.order - b.order);
+                const isExpanded = !!expandedSections[section.id];
+                const doneInSection = secLessons.filter((l) => progressList.find((p) => p.lessonId === l.id)?.isCompleted).length;
+                return (
+                  <div key={section.id} className="border-b border-neutral-100 last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section.id)}
+                      aria-expanded={isExpanded}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-neutral-50 cursor-pointer"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-neutral-900">
+                        {secIdx + 1}. {section.title}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-neutral-500">
+                        {doneInSection}/{secLessons.length}
+                      </span>
+                      {isExpanded ? <ChevronUp className="h-4 w-4 text-neutral-400" /> : <ChevronDown className="h-4 w-4 text-neutral-400" />}
+                    </button>
+
+                    {isExpanded && (
+                      <ul className="pb-1">
+                        {secLessons.length === 0 ? (
+                          <li className="px-4 py-3 text-center text-xs text-neutral-400">등록된 강의가 없습니다.</li>
+                        ) : (
+                          secLessons.map((lesson) => {
+                            const isActive = lesson.id === activeLesson?.id;
+                            const isDone = progressList.find((p) => p.lessonId === lesson.id)?.isCompleted;
+                            const isUnlocked = isLessonUnlocked(lesson);
+                            return (
+                              <li key={lesson.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectLesson(lesson)}
+                                  aria-current={isActive ? 'true' : undefined}
+                                  className={`relative flex w-full items-center gap-3 px-4 py-2.5 text-left cursor-pointer ${
+                                    isActive ? 'bg-brand-50' : !isUnlocked ? 'opacity-60 hover:bg-neutral-50' : 'hover:bg-neutral-50'
+                                  }`}
+                                >
+                                  {isActive && <span className="absolute inset-y-0 left-0 w-0.5 bg-brand-600" />}
+                                  <span className="shrink-0">
+                                    {isDone ? (
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    ) : !isUnlocked ? (
+                                      <Lock className="h-4 w-4 text-neutral-400" />
+                                    ) : (
+                                      <span className={`block h-4 w-4 rounded-full border-[1.5px] ${isActive ? 'border-brand-600' : 'border-neutral-300'}`} />
+                                    )}
+                                  </span>
+                                  <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-semibold text-brand-800' : 'text-neutral-700'}`}>
+                                    {lesson.title}
+                                  </span>
+                                  <span className="shrink-0 text-xs tabular-nums text-neutral-400">
+                                    {lesson.type === 'video'
+                                      ? formatDuration(lesson.durationSeconds, lesson.durationStatus)
+                                      : lesson.type === 'exam'
+                                      ? '시험'
+                                      : '퀴즈'}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </aside>
       </div>
 
-      {/* Course All Lessons Completed Celebration Modal with Pure CSS Confetti & Animation */}
       {course && (
         <CourseCompletionModal
           isOpen={showCompletionModal}
@@ -1440,7 +1239,6 @@ export const LearnPage: React.FC<LearnPageProps> = ({
         />
       )}
 
-      {/* User Profile Preview Modal */}
       <UserProfilePreviewModal
         userId={previewUser?.userId || null}
         fallbackData={previewUser?.fallbackData}
