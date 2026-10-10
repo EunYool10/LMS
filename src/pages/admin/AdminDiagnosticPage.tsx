@@ -633,16 +633,14 @@ export const AdminDiagnosticPage: React.FC<AdminDiagnosticPageProps> = ({ onNavi
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Banner */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">SYSTEM DIAGNOSTIC</span>
-            <span className="text-xs text-slate-400">· {scanTimestamp ? `마지막 검사: ${scanTimestamp}` : '검사 대기'}</span>
+            <span className="text-xs text-neutral-500">{scanTimestamp ? `마지막 검사: ${scanTimestamp}` : '검사 대기'}</span>
           </div>
-          <h2 className="text-lg font-bold text-slate-900">DB 무결성 진단 및 데이터 일관성 검증 센터</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-neutral-900">DB 진단</h1>
+          <p className="mt-1 text-sm text-neutral-500">
             User, Instructor, Course, Content, Enrollment, Progress, Quiz 등 11개 핵심 영역의 무결성을 실시간 진단합니다.
           </p>
         </div>

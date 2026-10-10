@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { storage } from '../../services/storage';
 import { Course } from '../../types';
 import { Badge } from '../../components/common/Badge';
-import { CourseThumbnail } from '../../components/common/CourseThumbnail';
+import { CourseCover } from '../../components/common/CourseCover';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
@@ -123,10 +123,10 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">전체 강의 목록 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-neutral-900">전체 강의 목록 관리</h1>
+          <p className="mt-1 text-sm text-neutral-500">
             등록된 강의의 커리큘럼 편집, 영상 업로드, 퀴즈 출제 및 공개 상태를 관리합니다.
           </p>
         </div>
@@ -279,11 +279,12 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
                       onChange={() => handleToggleSelectCourse(course.id)}
                       className="w-4 h-4 mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
                     />
-                    <CourseThumbnail
-                      src={course.thumbnail}
-                      alt={course.title}
-                      containerClassName="w-16 h-11 rounded-lg overflow-hidden border border-slate-200 shrink-0"
-                      fallbackText={course.title.slice(0, 3)}
+                    <CourseCover
+                      thumbnail={course.thumbnail}
+                      title={course.title}
+                      categoryId={course.categoryId}
+                      compact
+                      className="aspect-video w-16 shrink-0 rounded-md"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -355,7 +356,7 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
 
           {/* Desktop Table View (Hidden on mobile) */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full whitespace-nowrap text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-3 w-10 text-center">
@@ -403,11 +404,12 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
 
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <CourseThumbnail
-                            src={course.thumbnail}
-                            alt={course.title}
-                            containerClassName="w-14 h-9 rounded-lg overflow-hidden border border-slate-200 shrink-0"
-                            fallbackText={course.title.slice(0, 3)}
+                          <CourseCover
+                            thumbnail={course.thumbnail}
+                            title={course.title}
+                            categoryId={course.categoryId}
+                            compact
+                            className="aspect-video w-14 shrink-0 rounded-md"
                           />
                           <div className="min-w-0">
                             <span className="font-bold text-slate-900 line-clamp-1">{course.title}</span>

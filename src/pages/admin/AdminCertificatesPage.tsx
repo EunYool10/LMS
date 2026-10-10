@@ -268,63 +268,38 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto select-none">
-      {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl sm:rounded-3xl p-6 sm:p-7 border border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-indigo-300 font-bold tracking-wider uppercase">
-              TDSN LMS Official Certification System
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-              <ShieldCheck className="w-3 h-3" />
-              진위 검증 센터
-            </span>
-          </div>
-
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-            <Award className="w-6 h-6 text-amber-400 shrink-0" />
-            <span>수료증 인증번호 및 발급 관리</span>
-          </h1>
-
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            발급된 공식 수료증의 인증번호(TDSN-XXXXXXXX)를 실시간으로 조회하고, 원본 발급 내역 및 진위를 즉시 검증할 수 있습니다.
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-neutral-900">수료증 관리</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            발급된 수료증의 인증번호(TDSN-XXXXXXXX)를 조회하고 원본 발급 내역과 대조해 진위를 확인합니다.
           </p>
         </div>
-
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>발급 대장 CSV 다운로드</span>
-          </button>
-        </div>
-      </div>
+        <button type="button" onClick={handleExportCSV} className="lms-btn lms-btn-secondary shrink-0">
+          <Download className="w-4 h-4" />
+          발급 대장 CSV
+        </button>
+      </header>
 
       {/* =========================================================================
           FEATURE 1: CERTIFICATE VERIFICATION (수료증 진위 검증 시스템)
           Allows administrators to search for and validate certificates by entering
           a unique certificate number, retrieving original certificate data.
           ========================================================================= */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-indigo-100 shadow-sm overflow-hidden">
-        <div className="p-5 sm:p-6 bg-gradient-to-br from-indigo-950/90 via-slate-900 to-indigo-900 text-white">
+      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        <div className="p-5 sm:p-6">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
+                <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
-                <h2 className="text-base sm:text-lg font-black text-white">
-                  수료증 진위 검증 (Certificate Verification)
+                <h2 className="text-base font-semibold text-neutral-900">
+                  수료증 진위 검증
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                  공식 검증 모듈
-                </span>
               </div>
-              <p className="text-xs text-slate-300">
+              <p className="text-[13px] text-neutral-500">
                 수료증에 기재된 고유 인증번호(예: TDSN-XXXXXXXX)를 입력하면 데이터베이스의 원본 발급 내역과 대조하여 진위 여부를 즉시 검증하고 원본 문서를 호출합니다.
               </p>
             </div>
@@ -332,13 +307,13 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
             {/* Quick Sample Buttons */}
             {allCertificates.length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                <span className="text-[11px] text-slate-400 mr-1">빠른 테스트 샘플:</span>
+                <span className="text-xs text-neutral-500 mr-1">최근 발급:</span>
                 {allCertificates.slice(0, 3).map((item) => (
                   <button
                     key={item.certCode}
                     type="button"
                     onClick={() => handleQuickVerifySample(item.certCode)}
-                    className="font-mono text-[11px] font-bold px-2 py-1 bg-white/10 hover:bg-white/20 text-indigo-200 hover:text-white rounded-lg border border-white/10 transition-colors cursor-pointer"
+                    className="font-mono text-[11px] font-semibold px-2 py-1 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 rounded-md border border-neutral-200 transition-colors cursor-pointer"
                     title={`${item.user?.name || '수강생'} - ${item.course.title}`}
                   >
                     {item.certCode}
@@ -364,13 +339,13 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
                 value={verifyInput}
                 onChange={(e) => setVerifyInput(e.target.value)}
                 placeholder="검증할 수료증 고유 인증번호를 입력하세요 (예: TDSN-XXXXXXXX)..."
-                className="w-full pl-10 pr-10 py-3 text-xs sm:text-sm bg-slate-900/90 text-white placeholder:text-slate-400 border border-indigo-500/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono tracking-wider font-bold"
+                className="lms-input h-11 pl-10 pr-10 font-mono tracking-wide"
               />
               {verifyInput && (
                 <button
                   type="button"
                   onClick={handleResetVerification}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
                   title="초기화"
                 >
                   <X className="w-4 h-4" />
@@ -381,17 +356,17 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="py-3 px-5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs sm:text-sm font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                className="lms-btn lms-btn-primary h-11"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>진위 검증하기</span>
+                <span>검증</span>
               </button>
 
               {hasValidated && (
                 <button
                   type="button"
                   onClick={handleResetVerification}
-                  className="py-3 px-3 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-white/10 transition-colors cursor-pointer whitespace-nowrap"
+                  className="lms-btn lms-btn-secondary h-11 px-3"
                   title="검증 결과 초기화"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -739,7 +714,7 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full whitespace-nowrap text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
               <tr>
                 <th className="py-3.5 px-4">수료증 고유 인증번호</th>

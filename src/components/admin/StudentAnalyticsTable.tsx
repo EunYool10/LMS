@@ -188,18 +188,18 @@ export const StudentAnalyticsTable: React.FC = () => {
 
       {/* Desktop Table View (>= md) */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full whitespace-nowrap text-left text-xs">
           <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
             <tr>
-              <th className="py-3 px-4 font-semibold">수강생</th>
-              <th className="py-3 px-4 font-semibold">수강 강의</th>
-              <th className="py-3 px-4 font-semibold">수료증 인증번호</th>
-              <th className="py-3 px-4 font-semibold">진도율</th>
-              <th className="py-3 px-4 font-semibold">완료 차시</th>
-              <th className="py-3 px-4 font-semibold">최근 학습 위치</th>
-              <th className="py-3 px-4 font-semibold">신청일</th>
-              <th className="py-3 px-4 font-semibold">상태</th>
-              <th className="py-3 px-4 font-semibold text-right">수료증</th>
+              <th className="py-2.5 px-3 font-semibold">수강생</th>
+              <th className="py-2.5 px-3 font-semibold">수강 강의</th>
+              <th className="py-2.5 px-3 font-semibold">수료증 인증번호</th>
+              <th className="py-2.5 px-3 font-semibold">진도율</th>
+              <th className="py-2.5 px-3 font-semibold">완료 차시</th>
+              <th className="py-2.5 px-3 font-semibold">최근 학습 위치</th>
+              <th className="py-2.5 px-3 font-semibold">신청일</th>
+              <th className="py-2.5 px-3 font-semibold">상태</th>
+              <th className="py-2.5 px-3 font-semibold text-right">수료증</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -212,7 +212,7 @@ export const StudentAnalyticsTable: React.FC = () => {
             ) : (
               filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3.5 px-4">
+                  <td className="py-3 px-3">
                     <div className="flex items-center gap-2.5">
                       <Avatar
                         src={item.studentAvatar}
@@ -225,12 +225,12 @@ export const StudentAnalyticsTable: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="py-3.5 px-4">
+                  <td className="py-3 px-3">
                     <span className="font-semibold text-slate-900 line-clamp-1 max-w-[180px]" title={item.courseTitle}>
                       {item.courseTitle}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4">
+                  <td className="py-3 px-3">
                     {item.certCode ? (
                       <button
                         type="button"
@@ -249,7 +249,7 @@ export const StudentAnalyticsTable: React.FC = () => {
                       <span className="text-slate-400 text-xs">-</span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 min-w-[130px]">
+                  <td className="py-3 px-3 min-w-[130px]">
                     <div className="flex items-center gap-2">
                       <ProgressBar
                         progress={item.progressPercentage}
@@ -259,16 +259,16 @@ export const StudentAnalyticsTable: React.FC = () => {
                       <span className="font-bold text-slate-800 tabular-nums">{item.progressPercentage}%</span>
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 font-medium text-slate-700">
+                  <td className="py-3 px-3 font-medium text-slate-700">
                     {item.completedLessons} / {item.totalLessons} 강
                   </td>
-                  <td className="py-3.5 px-4 text-slate-500 truncate max-w-[130px]" title={item.lastLessonTitle}>
+                  <td className="py-3 px-3 text-slate-500 truncate max-w-[130px]" title={item.lastLessonTitle}>
                     {item.lastLessonTitle}
                   </td>
-                  <td className="py-3.5 px-4 text-slate-400">
+                  <td className="py-3 px-3 text-slate-400">
                     {new Date(item.enrolledAt).toLocaleDateString('ko-KR')}
                   </td>
-                  <td className="py-3.5 px-4">
+                  <td className="py-3 px-3">
                     {item.progressPercentage === 100 ? (
                       <Badge variant="success" size="sm">
                         <CheckCircle2 className="w-3 h-3" /> 이수 완료
@@ -279,7 +279,7 @@ export const StudentAnalyticsTable: React.FC = () => {
                       </Badge>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 text-right">
+                  <td className="py-3 px-3 text-right">
                     {item.courseObj ? (
                       <button
                         type="button"

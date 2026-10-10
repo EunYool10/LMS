@@ -64,10 +64,10 @@ export const AdminQuestionsPage: React.FC<AdminQuestionsPageProps> = ({ onNaviga
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">문제 및 퀴즈 은행 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-neutral-900">문제 및 퀴즈 은행 관리</h1>
+          <p className="mt-1 text-sm text-neutral-500">
             강의별 퀴즈와 평가 시험 문항(객관식/복수선택/OX/주관식), 배점 및 합격 기준을 통합 관리합니다.
           </p>
         </div>

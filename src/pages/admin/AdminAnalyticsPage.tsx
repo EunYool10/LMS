@@ -198,10 +198,10 @@ export const AdminAnalyticsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Top Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">학습 분석 및 수강생 기록</h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900">학습 분석 및 수강생 기록</h1>
+          <p className="mt-1 text-sm text-neutral-500">
             실제 수강 데이터 기반의 학습 진도율, 이수 완료율 및 평가 시험 성적을 모니터링합니다.
           </p>
         </div>
@@ -211,22 +211,22 @@ export const AdminAnalyticsPage: React.FC = () => {
             type="button"
             id="btn-open-certificate-lookup"
             onClick={() => setIsCertModalOpen(true)}
-            className="py-2 px-3.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="lms-btn lms-btn-secondary lms-btn-sm"
             title="수료증 인증번호 진위 조회 및 발급 확인"
           >
-            <Award className="w-4 h-4 text-white" />
-            <span>수료증 인증번호 조회</span>
+            <Award className="w-4 h-4 text-neutral-500" />
+            <span>수료증 조회</span>
           </button>
 
           <button
             type="button"
             id="btn-export-analytics-csv"
             onClick={handleExportCSV}
-            className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="lms-btn lms-btn-secondary lms-btn-sm"
             title="강의별 이수율 및 수강생 활동 지표 CSV 다운로드"
           >
             <Download className="w-4 h-4" />
-            <span>통계 보고서 내보내기 (CSV)</span>
+            <span>CSV 내보내기</span>
           </button>
 
           {/* Subtab Toggle */}

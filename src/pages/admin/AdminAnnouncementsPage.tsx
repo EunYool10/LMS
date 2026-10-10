@@ -338,29 +338,13 @@ export const AdminAnnouncementsPage: React.FC<AdminAnnouncementsPageProps> = ({ 
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto select-none">
-      {/* Top Header Card */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/90 shadow-2xs">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-              <Megaphone className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  공지사항 통합 관리 센터
-                </h1>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Cloud className="w-3 h-3 text-emerald-600" />
-                  <span>실시간 클라우드 동기화</span>
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                수강생 포털 최상단에 노출되는 <strong>전사 메인 공지</strong>와 개별 과정별 <strong>강의 공지</strong>를 통합 제어합니다.
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-neutral-900">공지사항</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            홈 상단에 노출되는 전사 공지와 강의별 공지를 관리합니다.
+          </p>
         </div>
 
         {/* Header Action Button */}
@@ -370,7 +354,7 @@ export const AdminAnnouncementsPage: React.FC<AdminAnnouncementsPageProps> = ({ 
               type="button"
               id="btn-create-sys-announcement"
               onClick={handleOpenCreateSystem}
-              className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              className="lms-btn lms-btn-primary"
             >
               <Plus className="w-4 h-4" />
               <span>전사 공지 등록</span>
@@ -380,7 +364,7 @@ export const AdminAnnouncementsPage: React.FC<AdminAnnouncementsPageProps> = ({ 
               type="button"
               id="btn-create-course-announcement"
               onClick={handleOpenCreateCourse}
-              className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              className="lms-btn lms-btn-primary"
             >
               <Plus className="w-4 h-4" />
               <span>강의 공지 등록</span>
