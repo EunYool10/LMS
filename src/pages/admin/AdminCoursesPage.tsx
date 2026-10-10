@@ -1,35 +1,40 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { storage } from '../../services/storage';
 import { Course } from '../../types';
-import { Badge } from '../../components/common/Badge';
 import { CourseCover } from '../../components/common/CourseCover';
 import { AssignCourseModal } from '../../components/admin/AssignCourseModal';
+import { AdminPageHeader, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { formatCourseTotalDuration } from '../../utils/duration';
-import {
-  Plus,
-  Search,
-  BookOpen,
-  Edit2,
-  Trash2,
-  Eye,
-  EyeOff,
-  Users,
-  Clock,
-  Layers,
-  AlertTriangle,
-  CheckCircle2,
-  UserPlus,
-} from 'lucide-react';
-
+import { AlertTriangle, Edit2, Eye, EyeOff, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
 import { LEGACY_CATEGORY_MAP } from '../../data/categoriesData';
 
 interface AdminCoursesPageProps {
   onNavigate: (view: string, param?: string) => void;
 }
+
+type StatusFilter = 'all' | 'published' | 'draft';
+type SortKey = 'updated' | 'enrolled' | 'title';
+
+/** Small on/off switch used for the publish state. */
+const PublishSwitch: React.FC<{ on: boolean; onToggle: () => void; label: string }> = ({ on, onToggle, label }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={on}
+    aria-label={label}
+    onClick={onToggle}
+    className="group inline-flex items-center gap-2 cursor-pointer"
+  >
+    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-emerald-500' : 'bg-neutral-300'}`}>
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-xs transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+    </span>
+    <span className={`text-xs font-medium ${on ? 'text-emerald-700' : 'text-neutral-500'}`}>{on ? '공개' : '비공개'}</span>
+  </button>
+);
 
 export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }) => {
   const { user: currentUser } = useAuth();
@@ -38,590 +43,446 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
   const [courses, setCourses] = useState<Course[]>(() => storage.getCourses(true));
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('updated');
 
-  // Bulk Selection State
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
   const categories = storage.getCategories();
+  const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
 
-  const reload = () => {
-    setCourses(storage.getCourses(true));
-  };
+  const reload = () => setCourses(storage.getCourses(true));
 
-  const handleTogglePublish = (courseId: string, current: boolean) => {
-    const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
-    storage.toggleCoursePublish(courseId, !current, actor);
+  const handleTogglePublish = (course: Course) => {
+    storage.toggleCoursePublish(course.id, !course.isPublished, actor);
     reload();
-    showToast(`강의가 [${!current ? '공개' : '비공개'}] 로 전환되었습니다.`, 'info');
-  };
-
-  const handleDeleteCourse = (course: Course) => {
-    setCourseToDelete(course);
+    showToast(`'${course.title}'을(를) ${!course.isPublished ? '공개' : '비공개'}로 바꿨습니다.`, 'info');
   };
 
   const handleConfirmSingleDelete = () => {
     if (!courseToDelete) return;
-    const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
     storage.deleteCourse(courseToDelete.id, actor);
-    showToast(`'${courseToDelete.title}' 강의가 성공적으로 영구 삭제되었습니다.`, 'success');
+    showToast(`'${courseToDelete.title}' 강의를 삭제했습니다.`, 'success');
+    setSelectedCourseIds((prev) => prev.filter((id) => id !== courseToDelete.id));
     setCourseToDelete(null);
     reload();
   };
 
-  const filtered = courses.filter((c) => {
-    const matchSearch =
-      c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.instructorName.toLowerCase().includes(search.toLowerCase());
-    const courseCatId = LEGACY_CATEGORY_MAP[c.categoryId] || c.categoryId;
-    const matchCat = categoryFilter === 'all' || courseCatId === categoryFilter;
-    return matchSearch && matchCat;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = courses.filter((c) => {
+      const matchSearch = !q || c.title.toLowerCase().includes(q) || c.instructorName.toLowerCase().includes(q);
+      const courseCatId = LEGACY_CATEGORY_MAP[c.categoryId] || c.categoryId;
+      const matchCat = categoryFilter === 'all' || courseCatId === categoryFilter;
+      const matchStatus = statusFilter === 'all' || (statusFilter === 'published' ? c.isPublished : !c.isPublished);
+      return matchSearch && matchCat && matchStatus;
+    });
+    return list.sort((a, b) => {
+      if (sortKey === 'enrolled') return (b.enrolledCount || 0) - (a.enrolledCount || 0);
+      if (sortKey === 'title') return a.title.localeCompare(b.title, 'ko');
+      return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
+    });
+  }, [courses, search, categoryFilter, statusFilter, sortKey]);
 
-  // Bulk Selection Handlers
-  const handleToggleSelectCourse = (courseId: string) => {
-    setSelectedCourseIds((prev) =>
-      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
-    );
-  };
+  const publishedCount = courses.filter((c) => c.isPublished).length;
+  const totalEnrolled = courses.reduce((s, c) => s + (c.enrolledCount || 0), 0);
+  const hasFilter = !!search.trim() || categoryFilter !== 'all' || statusFilter !== 'all';
 
-  const handleToggleSelectAll = () => {
-    const filteredIds = filtered.map((c) => c.id);
-    const areAllSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedCourseIds.includes(id));
-    if (areAllSelected) {
-      setSelectedCourseIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
-    } else {
-      setSelectedCourseIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
-    }
-  };
-
-  const handleClearSelection = () => {
-    setSelectedCourseIds([]);
+  const allSelected = filtered.length > 0 && filtered.every((c) => selectedCourseIds.includes(c.id));
+  const toggleOne = (id: string) =>
+    setSelectedCourseIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAll = () => {
+    const ids = filtered.map((c) => c.id);
+    setSelectedCourseIds((prev) => (allSelected ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]))));
   };
 
   const handleBulkPublish = (publish: boolean) => {
     if (selectedCourseIds.length === 0) return;
-    const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
-    const updatedCount = storage.bulkUpdateCoursePublish(selectedCourseIds, publish, actor);
-    if (updatedCount > 0) {
-      showToast(`${updatedCount}개 강의가 [${publish ? '공개' : '비공개'}]로 일괄 변경되었습니다.`, 'success');
-    }
+    const count = storage.bulkUpdateCoursePublish(selectedCourseIds, publish, actor);
+    if (count > 0) showToast(`${count}개 강의를 ${publish ? '공개' : '비공개'}로 바꿨습니다.`, 'success');
     reload();
     setSelectedCourseIds([]);
   };
 
   const handleConfirmBulkDelete = () => {
     if (selectedCourseIds.length === 0) return;
-    const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
-    const deletedCount = storage.bulkDeleteCourses(selectedCourseIds, actor);
-    if (deletedCount > 0) {
-      showToast(`${deletedCount}개 강의가 성공적으로 일괄 삭제되었습니다.`, 'success');
-    }
+    const count = storage.bulkDeleteCourses(selectedCourseIds, actor);
+    if (count > 0) showToast(`${count}개 강의를 삭제했습니다.`, 'success');
     setIsBulkDeleteModalOpen(false);
     reload();
     setSelectedCourseIds([]);
   };
 
+  const resetFilters = () => {
+    setSearch('');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+  };
+
+  const iconDelete = (course: Course) => (
+    <button
+      type="button"
+      onClick={() => setCourseToDelete(course)}
+      className="rounded-md p-1.5 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+      title="강의 삭제"
+      aria-label={`${course.title} 삭제`}
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">강의 관리</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            강의를 만들고 커리큘럼을 편집하거나 직원에게 수강을 배정합니다.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('admin-courses-create')}
-          className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>새 강의</span>
-        </button>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter('all')}
-            className={`py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-              categoryFilter === 'all'
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            전체 카테고리
+    <div className="min-w-0 space-y-6">
+      <AdminPageHeader
+        title="강의 관리"
+        description="강의를 만들고 커리큘럼을 편집하거나 직원에게 수강을 배정합니다."
+        actions={
+          <button type="button" onClick={() => onNavigate('admin-courses-create')} className="lms-btn lms-btn-primary">
+            <Plus className="h-4 w-4" />새 강의
           </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setCategoryFilter(cat.id)}
-              className={`py-1.5 px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                categoryFilter === cat.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
+        }
+      />
 
-        <div className="relative max-w-xs w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="강의명, 강사명 검색..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
+      <AdminStatStrip
+        stats={[
+          { label: '전체 강의', value: `${courses.length}개` },
+          { label: '공개', value: `${publishedCount}개` },
+          { label: '비공개', value: `${courses.length - publishedCount}개` },
+          { label: '누적 수강', value: `${totalEnrolled.toLocaleString()}건` },
+        ]}
+      />
 
-      {/* Bulk Action Bar */}
-      {selectedCourseIds.length > 0 && (
-        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-fadeIn">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-indigo-950 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-              선택된 강의: <strong className="text-indigo-600 font-bold">{selectedCourseIds.length}개</strong>
-            </span>
-            <span className="text-indigo-300">|</span>
+      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {/* Toolbar or bulk-action bar */}
+        {selectedCourseIds.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 bg-brand-50/60 px-4 py-3">
+            <span className="text-sm font-medium text-neutral-900">{selectedCourseIds.length}개 선택</span>
             <button
               type="button"
               id="btn-clear-course-selection"
-              onClick={handleClearSelection}
-              className="text-slate-500 hover:text-indigo-700 underline cursor-pointer"
+              onClick={() => setSelectedCourseIds([])}
+              className="inline-flex items-center gap-1 text-[13px] text-neutral-500 hover:text-neutral-900 cursor-pointer"
             >
+              <X className="h-3.5 w-3.5" />
               선택 해제
             </button>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              id="btn-bulk-publish-courses"
-              onClick={() => handleBulkPublish(true)}
-              className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>일괄 공개 전환</span>
-            </button>
-            <button
-              type="button"
-              id="btn-bulk-unpublish-courses"
-              onClick={() => handleBulkPublish(false)}
-              className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <EyeOff className="w-3.5 h-3.5" />
-              <span>일괄 비공개 전환</span>
-            </button>
-            <button
-              type="button"
-              id="btn-bulk-delete-courses"
-              onClick={() => setIsBulkDeleteModalOpen(true)}
-              className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>일괄 강의 삭제</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Courses List Table & Mobile Card View */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="등록된 강의가 없습니다"
-          description="새로운 사내 교육 과정이 개설되면 이곳에 표시됩니다."
-          showAction
-          actionLabel="신규 강의 개설하기"
-          onAction={() => onNavigate('admin-courses-create')}
-        />
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          {/* Mobile Card List View (Visible on small screens) */}
-          <div className="block md:hidden divide-y divide-slate-100">
-            {/* Mobile Select All Header */}
-            <div className="p-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-600">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={
-                    filtered.length > 0 &&
-                    filtered.every((c) => selectedCourseIds.includes(c.id))
-                  }
-                  onChange={handleToggleSelectAll}
-                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                />
-                <span>전체 선택 ({selectedCourseIds.length}/{filtered.length})</span>
-              </label>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <button type="button" id="btn-bulk-publish-courses" onClick={() => handleBulkPublish(true)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                <Eye className="h-4 w-4" />
+                공개
+              </button>
+              <button type="button" id="btn-bulk-unpublish-courses" onClick={() => handleBulkPublish(false)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                <EyeOff className="h-4 w-4" />
+                비공개
+              </button>
+              <button
+                type="button"
+                id="btn-bulk-delete-courses"
+                onClick={() => setIsBulkDeleteModalOpen(true)}
+                className="lms-btn lms-btn-sm border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                삭제
+              </button>
             </div>
-
-            {filtered.map((course) => {
-              const isSelected = selectedCourseIds.includes(course.id);
-              return (
-                <div
-                  key={`mobile-${course.id}`}
-                  className={`p-4 space-y-3 transition-colors ${
-                    isSelected ? 'bg-indigo-50/30' : 'bg-white'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleToggleSelectCourse(course.id)}
-                      className="w-4 h-4 mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
-                    />
-                    <CourseCover
-                      thumbnail={course.thumbnail}
-                      title={course.title}
-                      categoryId={course.categoryId}
-                      compact
-                      className="aspect-video w-16 shrink-0 rounded-md"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                        <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                          {course.categoryName}
-                        </span>
-                        <Badge variant="neutral" size="sm">
-                          {course.level}
-                        </Badge>
-                      </div>
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-2 leading-snug">
-                        {course.title}
-                      </h4>
-                    </div>
-                  </div>
-
-                  {/* Course Details Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-                    <div className="flex items-center gap-3">
-                      <span>강사: <strong className="text-slate-700 font-semibold">{course.instructorName}</strong></span>
-                      <span>수강생: <strong className="text-slate-700 font-semibold">{course.enrolledCount}명</strong></span>
-                      <span>총 {course.totalLessons}강</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePublish(course.id, course.isPublished)}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10.5px] transition-colors cursor-pointer ${
-                        course.isPublished
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      {course.isPublished ? (
-                        <>
-                          <Eye className="w-3 h-3" /> 공개 중
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="w-3 h-3" /> 비공개
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button type="button" onClick={() => setAssignTarget(course)} className="lms-btn lms-btn-secondary lms-btn-sm">
-                      <UserPlus className="w-3.5 h-3.5" />
-                      배정
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('admin-courses-edit', course.id)}
-                      className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>커리큘럼 편집</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCourse(course)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer rounded-lg hover:bg-rose-50"
-                      title="강의 삭제"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
+        ) : (
+          <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 lg:flex-row lg:items-center">
+            <div className="relative lg:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="강의명, 강사 검색"
+                aria-label="강의 검색"
+                className="lms-input h-9 pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                aria-label="카테고리"
+                className="lms-input h-9 w-auto pr-8"
+              >
+                <option value="all">전체 카테고리</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              <div className="inline-flex rounded-lg bg-neutral-100 p-0.5" role="group" aria-label="공개 상태">
+                {(
+                  [
+                    { id: 'all', label: '전체' },
+                    { id: 'published', label: '공개' },
+                    { id: 'draft', label: '비공개' },
+                  ] as const
+                ).map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-pressed={statusFilter === s.id}
+                    onClick={() => setStatusFilter(s.id)}
+                    className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer ${
+                      statusFilter === s.id ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 lg:ml-auto">
+              <span className="text-[13px] tabular-nums text-neutral-500">{filtered.length}개</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                aria-label="정렬"
+                className="lms-input h-9 w-auto pr-8"
+              >
+                <option value="updated">최근 수정순</option>
+                <option value="enrolled">수강생 많은 순</option>
+                <option value="title">이름순</option>
+              </select>
+            </div>
+          </div>
+        )}
 
-          {/* Desktop Table View (Hidden on mobile) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-3 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      id="checkbox-select-all-courses"
-                      checked={
-                        filtered.length > 0 &&
-                        filtered.every((c) => selectedCourseIds.includes(c.id))
-                      }
-                      onChange={handleToggleSelectAll}
-                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      title="전체 강의 선택/해제"
-                    />
-                  </th>
-                  <th className="py-3 px-4 font-semibold">강의 정보</th>
-                  <th className="py-3 px-4 font-semibold">난이도</th>
-                  <th className="py-3 px-4 font-semibold">강사</th>
-                  <th className="py-3 px-4 font-semibold">수강생 수</th>
-                  <th className="py-3 px-4 font-semibold">강의/콘텐츠</th>
-                  <th className="py-3 px-4 font-semibold">공개 상태</th>
-                  <th className="py-3 px-4 font-semibold">최근 수정</th>
-                  <th className="py-3 px-4 font-semibold text-right">관리 / 편집</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filtered.map((course) => {
-                  const isSelected = selectedCourseIds.includes(course.id);
-                  return (
-                    <tr
-                      key={course.id}
-                      className={`hover:bg-slate-50 transition-colors ${
-                        isSelected ? 'bg-indigo-50/40' : ''
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="py-3.5 px-3 w-10 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelectCourse(course.id)}
-                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <CourseCover
-                            thumbnail={course.thumbnail}
-                            title={course.title}
-                            categoryId={course.categoryId}
-                            compact
-                            className="aspect-video w-14 shrink-0 rounded-md"
-                          />
-                          <div className="min-w-0">
-                            <span className="font-bold text-slate-900 line-clamp-1">{course.title}</span>
-                            <span className="text-[11px] text-slate-400">{course.categoryName}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 font-medium text-slate-600">
-                        <Badge variant="neutral" size="sm">
-                          {course.level}
-                        </Badge>
-                      </td>
-
-                      <td className="py-3.5 px-4 font-medium text-slate-900">{course.instructorName}</td>
-
-                      <td className="py-3.5 px-4 font-bold text-slate-900 tabular-nums">
-                        {course.enrolledCount}명
-                      </td>
-
-                      <td className="py-3.5 px-4 text-slate-600">
-                        총 {course.totalLessons}강 ({formatCourseTotalDuration(course.totalDurationSeconds, course.durationMinutes)})
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePublish(course.id, course.isPublished)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[11px] transition-colors cursor-pointer ${
-                            course.isPublished
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                          }`}
-                        >
-                          {course.isPublished ? (
-                            <>
-                              <Eye className="w-3 h-3" /> 공개 중
-                            </>
-                          ) : (
-                            <>
-                              <EyeOff className="w-3 h-3" /> 비공개 초안
-                            </>
-                          )}
+        {filtered.length === 0 ? (
+          <div className="p-6">
+            {hasFilter ? (
+              <EmptyState
+                title="조건에 맞는 강의가 없습니다"
+                description="검색어나 필터를 바꿔 보세요."
+                showAction
+                actionLabel="필터 초기화"
+                onAction={resetFilters}
+              />
+            ) : (
+              <EmptyState
+                title="아직 강의가 없습니다"
+                description="첫 강의를 만들어 사내 교육을 시작하세요."
+                showAction
+                actionLabel="새 강의 만들기"
+                onAction={() => onNavigate('admin-courses-create')}
+              />
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Mobile list */}
+            <ul className="divide-y divide-neutral-100 md:hidden">
+              <li className="flex items-center gap-2 bg-neutral-50 px-4 py-2 text-[13px] text-neutral-600">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-brand-600" aria-label="전체 선택" />
+                전체 선택
+              </li>
+              {filtered.map((course) => {
+                const isSelected = selectedCourseIds.includes(course.id);
+                return (
+                  <li key={course.id} className={`space-y-3 px-4 py-3.5 ${isSelected ? 'bg-brand-50/40' : ''}`}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOne(course.id)}
+                        className="mt-1 h-4 w-4 shrink-0 accent-brand-600"
+                        aria-label={`${course.title} 선택`}
+                      />
+                      <CourseCover
+                        thumbnail={course.thumbnail}
+                        title={course.title}
+                        categoryId={course.categoryId}
+                        compact
+                        className="aspect-video w-20 shrink-0 rounded-md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-medium leading-snug text-neutral-900">{course.title}</p>
+                        <p className="mt-0.5 text-xs text-neutral-500">
+                          {course.categoryName} · {course.level} · {course.instructorName}
+                        </p>
+                        <p className="text-xs text-neutral-500">
+                          {course.totalLessons}강 · 수강생 {course.enrolledCount}명
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pl-7">
+                      <PublishSwitch on={course.isPublished} onToggle={() => handleTogglePublish(course)} label={`${course.title} 공개 여부`} />
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => setAssignTarget(course)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                          <UserPlus className="h-4 w-4" />
+                          배정
                         </button>
-                      </td>
+                        <button type="button" onClick={() => onNavigate('admin-courses-edit', course.id)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                          <Edit2 className="h-4 w-4" />
+                          편집
+                        </button>
+                        {iconDelete(course)}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
 
-                      <td className="py-3.5 px-4 text-slate-500 tabular-nums">
-                        {course.updatedAt ? new Date(course.updatedAt).toLocaleDateString('ko-KR') : '-'}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setAssignTarget(course)}
-                            className="py-1 px-2.5 bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-semibold rounded-md text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-                            title="직원에게 수강 배정"
-                          >
-                            <UserPlus className="w-3 h-3" />
-                            <span>배정</span>
-                          </button>
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full whitespace-nowrap text-left text-sm">
+                <thead className="border-b border-neutral-200 bg-neutral-50 text-xs text-neutral-500">
+                  <tr>
+                    <th className="w-10 px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        id="checkbox-select-all-courses"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="h-4 w-4 accent-brand-600"
+                        aria-label="전체 선택"
+                      />
+                    </th>
+                    <th className="px-3 py-2.5 font-medium">강의</th>
+                    <th className="px-3 py-2.5 font-medium">강사</th>
+                    <th className="px-3 py-2.5 font-medium">구성</th>
+                    <th className="px-3 py-2.5 text-right font-medium">수강생</th>
+                    <th className="px-3 py-2.5 font-medium">공개</th>
+                    <th className="px-3 py-2.5 font-medium">수정일</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                  {filtered.map((course) => {
+                    const isSelected = selectedCourseIds.includes(course.id);
+                    return (
+                      <tr key={course.id} className={isSelected ? 'bg-brand-50/40' : 'hover:bg-neutral-50'}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleOne(course.id)}
+                            className="h-4 w-4 accent-brand-600"
+                            aria-label={`${course.title} 선택`}
+                          />
+                        </td>
+                        <td className="max-w-[360px] px-3 py-3">
                           <button
                             type="button"
                             onClick={() => onNavigate('admin-courses-edit', course.id)}
-                            className="py-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-md text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                            className="group flex w-full items-center gap-3 text-left cursor-pointer"
                           >
-                            <Edit2 className="w-3 h-3" />
-                            <span>커리큘럼 편집</span>
+                            <CourseCover
+                              thumbnail={course.thumbnail}
+                              title={course.title}
+                              categoryId={course.categoryId}
+                              compact
+                              className="aspect-video w-16 shrink-0 rounded-md"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-neutral-900 group-hover:text-brand-700" title={course.title}>
+                                {course.title}
+                              </span>
+                              <span className="block truncate text-xs text-neutral-500">
+                                {course.categoryName} · {course.level}
+                              </span>
+                            </span>
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCourse(course)}
-                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                            title="강의 삭제"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Delete Modal */}
-      <Modal
-        isOpen={isBulkDeleteModalOpen}
-        onClose={() => setIsBulkDeleteModalOpen(false)}
-        title="선택 강의 일괄 삭제 확인"
-      >
-        <div className="space-y-4">
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-rose-900 leading-relaxed">
-              <p className="font-bold">선택하신 {selectedCourseIds.length}개 강의를 영구 삭제하시겠습니까?</p>
-              <p className="mt-1 text-rose-700">
-                삭제 시 강의에 속한 모든 섹션, 레슨 영상, 퀴즈/시험 문항 및 수강생 진도/이수 기록이 영구 파기되며 복구할 수 없습니다.
-              </p>
+                        </td>
+                        <td className="px-3 py-3">{course.instructorName}</td>
+                        <td className="px-3 py-3 text-neutral-500">
+                          {course.totalLessons}강 · {formatCourseTotalDuration(course.totalDurationSeconds, course.durationMinutes)}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{course.enrolledCount.toLocaleString()}</td>
+                        <td className="px-3 py-3">
+                          <PublishSwitch on={course.isPublished} onToggle={() => handleTogglePublish(course)} label={`${course.title} 공개 여부`} />
+                        </td>
+                        <td className="px-3 py-3 tabular-nums text-neutral-500">
+                          {course.updatedAt ? new Date(course.updatedAt).toLocaleDateString('ko-KR') : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button type="button" onClick={() => setAssignTarget(course)} className="lms-btn lms-btn-secondary lms-btn-sm" title="직원에게 수강 배정">
+                              <UserPlus className="h-4 w-4" />
+                              배정
+                            </button>
+                            <button type="button" onClick={() => onNavigate('admin-courses-edit', course.id)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                              <Edit2 className="h-4 w-4" />
+                              편집
+                            </button>
+                            {iconDelete(course)}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </>
+        )}
+      </section>
 
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 text-xs">
+      {/* Bulk delete */}
+      <Modal isOpen={isBulkDeleteModalOpen} onClose={() => setIsBulkDeleteModalOpen(false)} title={`강의 ${selectedCourseIds.length}개 삭제`}>
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-800">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+            <p className="leading-relaxed">선택한 강의의 섹션, 영상, 퀴즈와 수강생 진도·수료 기록이 모두 삭제되며 되돌릴 수 없습니다.</p>
+          </div>
+          <ul className="max-h-48 divide-y divide-neutral-100 overflow-y-auto rounded-lg border border-neutral-200 text-sm">
             {selectedCourseIds.map((id) => {
               const c = courses.find((item) => item.id === id);
               if (!c) return null;
               return (
-                <div key={id} className="p-2.5 flex items-center justify-between bg-slate-50/50">
-                  <div className="min-w-0 pr-2">
-                    <p className="font-semibold text-slate-800 truncate">{c.title}</p>
-                    <p className="text-[11px] text-slate-400">
-                      강사: {c.instructorName} · 수강생: {c.enrolledCount}명
-                    </p>
-                  </div>
-                  <Badge variant={c.isPublished ? 'success' : 'neutral'} size="sm">
-                    {c.isPublished ? '공개 중' : '비공개'}
-                  </Badge>
-                </div>
+                <li key={id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0 truncate text-neutral-800">{c.title}</span>
+                  <span className="shrink-0 text-xs text-neutral-500">수강생 {c.enrolledCount}명</span>
+                </li>
               );
             })}
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setIsBulkDeleteModalOpen(false)}
-              className="px-4 py-2 font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-            >
+          </ul>
+          <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+            <button type="button" onClick={() => setIsBulkDeleteModalOpen(false)} className="lms-btn lms-btn-secondary">
               취소
             </button>
-            <button
-              type="button"
-              id="btn-confirm-bulk-delete-courses"
-              onClick={handleConfirmBulkDelete}
-              className="px-4 py-2 font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>일괄 삭제 실행</span>
+            <button type="button" id="btn-confirm-bulk-delete-courses" onClick={handleConfirmBulkDelete} className="lms-btn bg-rose-600 text-white hover:bg-rose-700">
+              <Trash2 className="h-4 w-4" />
+              삭제
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Single Course Delete Confirmation Modal */}
-      <Modal
-        isOpen={!!courseToDelete}
-        onClose={() => setCourseToDelete(null)}
-        title="강의 영구 삭제 확인"
-      >
+      {/* Single delete */}
+      <Modal isOpen={!!courseToDelete} onClose={() => setCourseToDelete(null)} title="강의 삭제">
         {courseToDelete && (
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">선택하신 강의를 영구 삭제하시겠습니까?</p>
-                <p className="mt-1 text-rose-700 leading-relaxed">
-                  삭제 시 해당 강의에 등록된 모든 커리큘럼(섹션, 레슨 영상), 퀴즈 및 시험 문항, 수강생들의 진도율, 수료증 및 학습 이력 데이터가 영구 파기되며 복구할 수 없습니다.
-                </p>
-              </div>
+            <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-800">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+              <p className="leading-relaxed">
+                <strong className="font-semibold">'{courseToDelete.title}'</strong>를 삭제하면 커리큘럼, 퀴즈, 수강생 진도와 수료 기록이 모두 지워지며
+                되돌릴 수 없습니다.
+              </p>
             </div>
-
-            {/* Target Course Summary Box */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 text-sm truncate max-w-[320px]">{courseToDelete.title}</span>
-                <Badge variant={courseToDelete.isPublished ? 'success' : 'neutral'} size="sm">
-                  {courseToDelete.isPublished ? '공개 중' : '비공개'}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-2.5 text-slate-500 text-[11px] pt-1">
-                <span>카테고리: <strong className="text-slate-700">{courseToDelete.categoryName}</strong></span>
-                <span>•</span>
-                <span>강사: <strong className="text-slate-700">{courseToDelete.instructorName}</strong></span>
-                <span>•</span>
-                <span>수강생: <strong className="text-indigo-600 font-bold">{courseToDelete.enrolledCount}명</strong></span>
-                <span>•</span>
-                <span>총 <strong className="text-slate-700">{courseToDelete.totalLessons}강</strong></span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setCourseToDelete(null)}
-                className="px-4 py-2 font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-              >
+            <p className="text-[13px] text-neutral-500">
+              {courseToDelete.categoryName} · 강사 {courseToDelete.instructorName} · 수강생 {courseToDelete.enrolledCount}명 ·{' '}
+              {courseToDelete.totalLessons}강
+            </p>
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+              <button type="button" onClick={() => setCourseToDelete(null)} className="lms-btn lms-btn-secondary">
                 취소
               </button>
-              <button
-                type="button"
-                id="btn-confirm-delete-course"
-                onClick={handleConfirmSingleDelete}
-                className="px-4 py-2 font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>영구 삭제 실행</span>
+              <button type="button" id="btn-confirm-delete-course" onClick={handleConfirmSingleDelete} className="lms-btn bg-rose-600 text-white hover:bg-rose-700">
+                <Trash2 className="h-4 w-4" />
+                삭제
               </button>
             </div>
           </div>
         )}
       </Modal>
+
       <AssignCourseModal course={assignTarget} isOpen={!!assignTarget} onClose={() => setAssignTarget(null)} onAssigned={() => reload()} />
     </div>
   );
