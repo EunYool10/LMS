@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Award, Trophy, ChevronRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Trophy, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { AchievementBadge } from '../../types';
 import { AchievementInsignia } from '../profile/AchievementInsignia';
 
@@ -36,41 +36,33 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
   }, [unlockedBadges]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+    <div className="bg-white rounded-xl border border-neutral-200 p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-            <Award className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">학습 성취 및 랭크</h3>
-            <p className="text-[11px] text-slate-400">성취 뱃지와 진행도 요약</p>
-          </div>
-        </div>
+        <h3 className="text-sm font-semibold text-neutral-900">업적</h3>
 
         <button
           type="button"
           onClick={onOpenBook}
-          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer transition-colors"
+          className="text-[13px] font-medium text-neutral-500 hover:text-neutral-900 flex items-center gap-0.5 cursor-pointer transition-colors"
         >
-          <span>도감 열기</span>
+          <span>도감</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Honorary Rank Card */}
-      <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/70 flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-2xl shrink-0">{userBadgeRank.badge}</span>
           <div className="min-w-0">
             <div className="text-[10px] font-semibold text-slate-400">현재 학습자 등급</div>
-            <div className="text-xs sm:text-sm font-black text-slate-900 truncate">
+            <div className="text-sm font-semibold text-neutral-900 truncate">
               {userBadgeRank.title}
             </div>
           </div>
         </div>
-        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shrink-0">
+        <span className="text-[11px] font-semibold text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded-md shrink-0">
           {userBadgeRank.tier}
         </span>
       </div>
@@ -83,7 +75,7 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
             <span className="text-indigo-600">{unlockedCount}</span> / {totalCount}개 ({overallPercent}%)
           </span>
         </div>
-        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
           <div
             className="h-full bg-indigo-600 rounded-full transition-all duration-300"
             style={{ width: `${overallPercent}%` }}
@@ -95,7 +87,7 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
       {nextTargetBadge && (
         <div
           onClick={() => onSelectBadge && onSelectBadge(nextTargetBadge)}
-          className="p-2.5 rounded-xl bg-indigo-50/50 border border-indigo-100 hover:bg-indigo-50 transition-colors cursor-pointer flex items-center justify-between gap-2"
+          className="p-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors cursor-pointer flex items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2 min-w-0">
             <AchievementInsignia
@@ -104,14 +96,13 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
               size="xs"
             />
             <div className="min-w-0">
-              <div className="text-[10px] font-bold text-indigo-700 flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5" />
+              <div className="text-xs font-medium text-neutral-800 flex items-center gap-1">
                 <span>다음 목표: {nextTargetBadge.title}</span>
               </div>
               <p className="text-[10px] text-slate-500 truncate">{nextTargetBadge.conditionText}</p>
             </div>
           </div>
-          <span className="text-xs font-black text-indigo-600 tabular-nums shrink-0">
+          <span className="text-xs font-semibold text-brand-700 tabular-nums shrink-0">
             {nextTargetBadge.progressPercent}%
           </span>
         </div>
@@ -128,7 +119,7 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
                 type="button"
                 onClick={() => onSelectBadge && onSelectBadge(b)}
                 title={`${b.title} (${b.conditionText})`}
-                className="px-2 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 border border-slate-200/80 hover:border-indigo-200 text-xs font-semibold text-slate-700 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                className="px-2 py-1 rounded-md bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 text-xs font-medium text-neutral-700 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <AchievementInsignia badgeId={b.id} icon={b.icon} size="xs" />
                 <span className="truncate max-w-[80px] text-[11px]">{b.title}</span>
@@ -144,10 +135,10 @@ export const AchievementCompactWidget: React.FC<AchievementCompactWidgetProps> =
         type="button"
         id="btn-open-achievement-book-widget"
         onClick={onOpenBook}
-        className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+        className="lms-btn lms-btn-secondary lms-btn-sm w-full"
       >
-        <Trophy className="w-3.5 h-3.5 text-amber-400" />
-        <span>업적 도감 전체 보기 ({totalCount}개)</span>
+        <Trophy className="w-3.5 h-3.5 text-amber-500" />
+        <span>업적 도감 전체 보기 ({totalCount})</span>
       </button>
     </div>
   );

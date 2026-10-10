@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { storage } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useResponsive } from '../hooks/useResponsive';
 import { CourseCompletionModal } from '../components/student/CourseCompletionModal';
 import { AchievementBookModal } from '../components/student/AchievementBookModal';
-import { DesktopStudentDashboard } from '../components/desktop/DesktopStudentDashboard';
-import { MobileStudentDashboard } from '../components/mobile/MobileStudentDashboard';
+import { StudentDashboard, DashboardTab } from '../components/student/StudentDashboard';
 import { UserLearningGoal, AchievementBadge, LessonBookmark, StudentNote } from '../types';
 
 interface DashboardPageProps {
@@ -16,9 +14,8 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { isMobile } = useResponsive();
 
-  const [tab, setTab] = useState<'in_progress' | 'completed' | 'wishlist' | 'bookmarks_notes' | 'quizzes'>('in_progress');
+  const [tab, setTab] = useState<DashboardTab>('in_progress');
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalHoursInput, setGoalHoursInput] = useState<number>(10);
   const [streakDays, setStreakDays] = useState<number>(1);
@@ -33,7 +30,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [selectedCertLessonsCount, setSelectedCertLessonsCount] = useState<number>(0);
   const [isCertModalOpen, setIsCertModalOpen] = useState<boolean>(false);
   const [certModalAutoPrint, setCertModalAutoPrint] = useState<boolean>(false);
-  const [completedViewMode, setCompletedViewMode] = useState<'certificates' | 'courses'>('certificates');
 
   // Achievement Book Modal States
   const [isAchievementBookOpen, setIsAchievementBookOpen] = useState<boolean>(false);
@@ -41,14 +37,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   if (!user) {
     return (
-      <div className="max-w-4xl mx-auto py-20 px-4 text-center">
-        <h2 className="text-xl font-bold text-slate-800 mb-2">로그인이 필요합니다.</h2>
-        <p className="text-xs text-slate-500 mb-4">내 학습방과 진도율을 확인하려면 로그인하세요.</p>
-        <button
-          type="button"
-          onClick={() => onNavigate('home')}
-          className="py-2 px-4 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 cursor-pointer"
-        >
+      <div className="lms-container max-w-md py-20 text-center">
+        <h2 className="text-xl font-bold text-neutral-900">로그인이 필요합니다</h2>
+        <p className="mt-2 text-sm text-neutral-500">내 학습 현황과 진도를 보려면 로그인하세요.</p>
+        <button type="button" onClick={() => onNavigate('home')} className="lms-btn lms-btn-primary mt-6">
           홈으로 이동
         </button>
       </div>
@@ -177,9 +169,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     refreshUserData();
   };
 
-  // Recent In-Progress primary item
-  const recentItem = inProgressList[0];
-
   // Weekly calendar day map
   const daysOfWeek = ['월', '화', '수', '목', '금', '토', '일'];
   const today = new Date();
@@ -208,17 +197,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     completedList,
     wishlistItems,
     wishlistedCoursesList,
-    enrichedEnrollments,
     allAttempts,
     totalMinutesWatched,
     averageScore,
     streakDays,
     studentNotes,
     bookmarks,
-    recentItem,
     currentWeekDays,
-    daysOfWeek,
-    todayDayIndex,
     learningGoal,
     goalHoursInput,
     isEditingGoal,
@@ -238,20 +223,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     onWishlistToggle: handleWishlistToggle,
     tab,
     setTab,
-    completedViewMode,
-    setCompletedViewMode,
     badges,
     enrollments,
   };
 
   return (
     <>
-      {/* Device-specific UI Layer */}
-      {isMobile ? (
-        <MobileStudentDashboard {...dashboardProps} />
-      ) : (
-        <DesktopStudentDashboard {...dashboardProps} />
-      )}
+      <StudentDashboard {...dashboardProps} />
 
       {/* Official Course Certificate Full Preview & Download Modal */}
       {isCertModalOpen && selectedCertCourse && (
