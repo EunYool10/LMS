@@ -35,6 +35,10 @@ services:
         sync: false
       - key: YOUTUBE_API_KEY
         sync: false
+      # Discord 운영 알림(수강·수료·문의·보안 경고). 채널 편집 > 연동 > 웹후크에서 복사한 URL.
+      # 이 URL이 있으면 누구나 채널에 글을 쓸 수 있으므로 저장소나 화면에 두지 않습니다.
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
 
       # 소셜 로그인 (사용하는 것만 입력). VITE_* 값은 빌드 시점에 화면 코드에 들어갑니다.
       - key: KAKAO_CLIENT_ID

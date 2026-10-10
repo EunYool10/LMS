@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { firestoreService } from './firebase';
 import { Inquiry, InquiryCategory, User } from '../types';
 import { isAdminRole } from '../utils/rbac';
+import { notifyDiscord } from './discordNotify';
 
 export const INQUIRY_CATEGORIES: { id: InquiryCategory; label: string }[] = [
   { id: 'learning', label: '강의 · 학습' },
@@ -71,6 +72,13 @@ export async function submitInquiry(input: {
   };
   await firestoreService.saveInquiry(inquiry);
   notifyUpdated();
+  notifyDiscord('inquiry', {
+    inquiryId: inquiry.id,
+    title: inquiry.title,
+    categoryLabel: inquiryCategoryLabel(inquiry.category),
+    userName: inquiry.userName,
+    guest: !inquiry.userId,
+  });
   return inquiry;
 }
 

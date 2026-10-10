@@ -306,6 +306,13 @@ export interface SystemSettings {
   googleClientId?: string;
   /** Set when an admin wipes all enrollments/progress; clients clear their local caches once. */
   learningDataResetAt?: string;
+  /** Which events are posted to the Discord webhook (the URL itself is a server env var). Missing means on. */
+  discordNotify?: {
+    enrollment?: boolean;
+    completion?: boolean;
+    inquiry?: boolean;
+    security?: boolean;
+  };
   /** Admin-edited policy text. Missing or null means the built-in default text is used. */
   policies?: {
     terms?: PolicyOverride | null;

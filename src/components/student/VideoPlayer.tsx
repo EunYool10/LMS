@@ -30,6 +30,10 @@ import { progressApi } from '../../services/progressApi';
 import { mediaStore } from '../../services/mediaStore';
 import { formatPlayerTime, extractYouTubeVideoId, formatDuration, formatSecondsToKorean } from '../../utils/duration';
 import { isAdminRole } from '../../utils/rbac';
+import { notifyDiscord } from '../../services/discordNotify';
+
+/** Separate attempts to skip ahead in one lesson before the operators are told (once per lesson). */
+const SEEK_SKIP_REPORT_AFTER = 5;
 
 declare global {
   interface Window {
@@ -196,8 +200,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = React.memo(({
   const lastParentReportedSecRef = useRef<number>(-1);
   const lastParentReportTimeRef = useRef<number>(0);
 
+  // Counts separate attempts to skip into unwatched parts; one slider drag counts once.
+  const blockedSeekRef = useRef({ lessonId: '', count: 0, last: 0, reported: false });
+  const recordBlockedSeek = useCallback(() => {
+    const currentLesson = lessonRef.current;
+    const activeUser = userRef.current;
+    if (!currentLesson || !activeUser?.id) return;
+    const s = blockedSeekRef.current;
+    if (s.lessonId !== currentLesson.id) Object.assign(s, { lessonId: currentLesson.id, count: 0, last: 0, reported: false });
+    const now = Date.now();
+    const gap = now - s.last;
+    s.last = now;
+    if (gap < 1500) return;
+    s.count += 1;
+    if (s.count >= SEEK_SKIP_REPORT_AFTER && !s.reported) {
+      s.reported = true;
+      notifyDiscord('suspicious', {
+        reason: 'seek_skip',
+        userId: activeUser.id,
+        userName: activeUser.name,
+        lessonId: currentLesson.id,
+        lessonTitle: currentLesson.title,
+        courseTitle: storage.getCourseById(currentLesson.courseId)?.title || currentLesson.courseId,
+        count: s.count,
+      });
+    }
+  }, []);
+
   // Helper to show informative toast when seek forward is blocked
   const showSeekRestrictedToast = useCallback((maxAllowedSec: number) => {
+    recordBlockedSeek();
     const now = Date.now();
     if (now - lastSeekWarningTimeRef.current < 2500) return;
     lastSeekWarningTimeRef.current = now;
@@ -208,7 +240,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = React.memo(({
       'warning',
       '탐색 제한'
     );
-  }, [showToast]);
+  }, [showToast, recordBlockedSeek]);
 
   // YouTube Seek Policy Guard:
   // Restricts regular students from seeking forward past their maximum watched position.
@@ -1262,6 +1294,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = React.memo(({
       const maxAllowed = Math.max(currentTimeRef.current, maxWatchedPositionRef.current);
       if (newTime > maxAllowed + 0.5) {
         newTime = maxAllowed;
+        recordBlockedSeek();
         if (!seekingWarningShownRef.current) {
           seekingWarningShownRef.current = true;
           showToast(

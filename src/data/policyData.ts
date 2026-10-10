@@ -178,6 +178,7 @@ export const PRIVACY_POLICY: PolicyDocument = {
         '2. 안정적인 클라우드 기반 LMS 운영을 위하여 다음과 같이 개인정보 처리업무를 위탁하고 있습니다.',
         '- 수탁업체: Google LLC (Firebase) / 위탁 업무: 데이터베이스(Firestore) 저장, Google 로그인 인증',
         '- 수탁업체: Render Services, Inc. / 위탁 업무: 서버 호스팅 및 운영',
+        '- 수탁업체: Discord Inc. / 위탁 업무: 운영자 알림 전송(이름, 수강·수료한 강의명, 문의 제목, 보안 경고 시 계정·접속 IP)',
         '- 보유 및 이용 기간: 회원 탈퇴 시 또는 위탁 계약 종료 시까지',
       ],
     },

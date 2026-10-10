@@ -31,6 +31,10 @@ import { firestoreService } from './firebase';
 import { calculateCourseStats, extractYouTubeVideoId } from '../utils/duration';
 import { CATEGORIES_DATA, LEGACY_CATEGORY_MAP, getCategoryById } from '../data/categoriesData';
 import { isAdminRole, isServiceOwner } from '../utils/rbac';
+import { notifyDiscord } from './discordNotify';
+
+/** Audit actions that are also posted to the operators' Discord channel as security notices. */
+const DISCORD_ADMIN_ACTIONS = new Set(['UPDATE_ROLE', 'UPDATE_STATUS', 'DELETE_USER', 'COURSE_DELETE', 'BULK_DELETE', 'LEARNING_DATA_RESET']);
 
 const STORAGE_KEYS = {
   USERS: 'tdsnt_users_v2',
@@ -1291,6 +1295,12 @@ export class TDSNTLMSStorage {
       logs.length = 300;
     }
     this.set(STORAGE_KEYS.AUDIT_LOGS, logs);
+
+    if (log.action === 'COURSE_ASSIGN') {
+      notifyDiscord('assignment', { actorName: log.actorName, details: log.details });
+    } else if (DISCORD_ADMIN_ACTIONS.has(log.action)) {
+      notifyDiscord('admin_action', { action: log.action, actorName: log.actorName, details: log.details });
+    }
     return newLog;
   }
 
@@ -1832,8 +1842,29 @@ export class TDSNTLMSStorage {
     return newEnrollment;
   }
 
+  /** Self-enrollment by a learner (course page or opening the classroom). */
   public enrollUserInCourse(userId: string, courseId: string): Enrollment {
-    return this.enroll(userId, courseId);
+    const isNew = !this.getEnrollment(userId, courseId);
+    const enrollment = this.enroll(userId, courseId);
+    if (isNew) {
+      const learner = this.learnerForNotice(userId);
+      if (learner) {
+        notifyDiscord('enrollment', {
+          userId,
+          courseId,
+          userName: learner.name,
+          courseTitle: this.getCourseById(courseId)?.title || courseId,
+        });
+      }
+    }
+    return enrollment;
+  }
+
+  /** The learner to name in a Discord notice; admins previewing their own courses are skipped. */
+  private learnerForNotice(userId: string): User | undefined {
+    const cur = this.getCurrentUser();
+    const u = this.getUserById(userId) || (cur?.id === userId ? cur : undefined);
+    return u && !isAdminRole(u.role) ? u : undefined;
   }
 
   public getAllProgress(): LessonProgress[] {
@@ -1946,6 +1977,15 @@ export class TDSNTLMSStorage {
       enr.lastPlaybackTimeSeconds = currentPosition;
       if (progressPercentage === 100 && !enr.completedAt) {
         enr.completedAt = new Date().toISOString();
+        const learner = this.learnerForNotice(userId);
+        if (learner) {
+          notifyDiscord('completion', {
+            userId,
+            courseId,
+            userName: learner.name,
+            courseTitle: this.getCourseById(courseId)?.title || courseId,
+          });
+        }
       }
       this.set(STORAGE_KEYS.ENROLLMENTS, enrollments);
     }

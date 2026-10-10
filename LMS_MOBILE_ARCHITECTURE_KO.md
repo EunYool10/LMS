@@ -102,7 +102,7 @@
 | 학습 현황 | `admin-analytics` | **과정별 이수**(미이수자, 수강 배정, 독려 메일, CSV) · 수강생 기록 · 통계 |
 | 수료증 조회 | `admin-certificates` | 인증번호 진위 검증, 발급 대장 |
 | 사용자 · 권한 | `admin-users` | 사용자 목록, 권한, 감사 로그 |
-| 환경설정 | `admin-settings` | 일반, 가입/점검 모드, **약관 · 정책 편집**(운영 규정 · 개인정보처리방침), 소셜 로그인 키, 관리자 계정, 데이터 관리(서비스 총괄 전용) |
+| 환경설정 | `admin-settings` | 일반, 가입/점검 모드, **약관 · 정책 편집**(운영 규정 · 개인정보처리방침), **알림(Discord)** 연결 상태 · 종류별 켜기 · 테스트, 소셜 로그인 키, 관리자 계정, 데이터 관리(서비스 총괄 전용) |
 
 **강의 편집기**(`pages/admin/AdminCourseEditorPage.tsx`)는 4단계입니다: 기본 정보 → 커리큘럼(`CurriculumManager`: 섹션·영상·퀴즈·평가) → 수강 설정(완료 기준·학습 목표·태그·강의 공지) → 검토·게시.
 
@@ -133,7 +133,8 @@
 5. **문의**(`services/inquiries.ts`)는 Firestore `system_settings` 컬렉션에 `inquiry_*` 문서(`kind: 'inquiry'`)로 저장합니다. 배포된 Firestore 규칙이 목록에 없는 새 컬렉션 쓰기를 막기 때문입니다. 규칙에 `inquiries` 컬렉션을 추가할 수 있게 되면 `firestoreService.saveInquiry/getInquiries`만 바꾸면 됩니다.
 6. **약관 · 정책**은 `data/policyData.ts`의 기본 문구를 쓰고, 관리자가 환경설정에서 고치면 `settings.policies.terms/privacy`에 저장됩니다(`services/policies.ts`의 `getPolicyDocument`). 본문 형식: `## 제1조 목적` 줄이 조항 제목, 나머지 줄은 한 줄이 한 문단.
 7. **가입 동의**: 이메일 가입은 회원가입 창에서 필수 약관 2개에 동의해야 하며(서버도 확인), 동의 시각을 `user.agreements`에 저장합니다. SNS로 처음 가입한 계정은 `ConsentGate`에서 동의해야 서비스를 쓸 수 있습니다(2026-10-11 이전 계정은 묻지 않음, `services/consent.ts`).
-8. 앱 내 알림(`addNotification`)은 아직 해당 브라우저에만 저장됩니다. 직원에게 이수를 독려할 때는 학습 현황의 **독려 메일**(숨은 참조로 메일 앱을 엶)을 씁니다.
+8. **Discord 운영 알림**: 화면(`services/discordNotify.ts`)이 `POST /api/notify/event`로 사건 종류만 알리면, 서버(`discordNotifier.ts`)가 정해진 형식으로 메시지를 만들어 `DISCORD_WEBHOOK_URL`(Render 환경 변수)로 보냅니다. 수강 신청 · 수강 배정 · 수료 · 문의 접수 · 관리 작업(권한 변경, 사용자/강의 삭제, 학습 기록 초기화) · 영상 건너뛰기 반복 시도는 화면에서, 관리자 로그인 · 로그인 실패 반복 · 정지 계정 로그인 시도 · 조작된 시청 기록은 서버에서 감지합니다. 종류별 켜고 끄기는 환경설정 > 알림(`settings.discordNotify`). 같은 수강·수료·문의는 하루에 한 번만 보내고, IP당 요청 수를 제한하며, `@everyone` 같은 멘션은 막습니다.
+9. 앱 내 알림(`addNotification`)은 아직 해당 브라우저에만 저장됩니다. 직원에게 이수를 독려할 때는 학습 현황의 **독려 메일**(숨은 참조로 메일 앱을 엶)을 씁니다.
 
 ---
 

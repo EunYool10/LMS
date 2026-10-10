@@ -1,21 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { storage } from '../../services/storage';
 import { PolicyOverride, SystemSettings } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/authApi';
 import { openPolicyModal } from '../common/PolicyModal';
+import { getDiscordStatus, sendDiscordTest } from '../../services/discordNotify';
 import { defaultPolicy, formatKoreanDate, overrideToDocument, parsePolicyText, POLICY_LABELS, policyToText, PolicyType } from '../../services/policies';
 import { AdminPageHeader } from './AdminPageHeader';
 import { BaseModal } from '../common/BaseModal';
-import { AlertTriangle, Check, Copy, Database, Eye, EyeOff, FileText, KeyRound, Lock, LogIn, RotateCcw, Save, Settings, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Bell, Check, Copy, Database, Eye, EyeOff, FileText, KeyRound, Lock, LogIn, RotateCcw, Save, Send, Settings, ShieldCheck } from 'lucide-react';
 
-type Section = 'general' | 'access' | 'policies' | 'social' | 'admins' | 'data';
+type Section = 'general' | 'access' | 'policies' | 'notifications' | 'social' | 'admins' | 'data';
 
 const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: '일반', icon: Settings },
   { id: 'access', label: '접근 · 보안', icon: ShieldCheck },
   { id: 'policies', label: '약관 · 정책', icon: FileText },
+  { id: 'notifications', label: '알림 (Discord)', icon: Bell },
   { id: 'social', label: '소셜 로그인', icon: LogIn },
   { id: 'admins', label: '관리자 계정', icon: KeyRound },
   { id: 'data', label: '데이터 관리', icon: Database },
@@ -84,6 +86,31 @@ export const SystemSettingsView: React.FC = () => {
   const [isChangingPw, setIsChangingPw] = useState(false);
 
   const [policyTab, setPolicyTab] = useState<PolicyType>('terms');
+  const [discordConfigured, setDiscordConfigured] = useState<boolean | null>(null);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  useEffect(() => {
+    if (section !== 'notifications') return;
+    setDiscordConfigured(null);
+    getDiscordStatus().then((s) => setDiscordConfigured(s ? s.configured : false));
+  }, [section]);
+
+  const discordOn = (key: 'enrollment' | 'completion' | 'inquiry' | 'security') => settings.discordNotify?.[key] !== false;
+  const setDiscordOn = (key: 'enrollment' | 'completion' | 'inquiry' | 'security', on: boolean) =>
+    update({ discordNotify: { ...settings.discordNotify, [key]: on } });
+
+  const handleDiscordTest = async () => {
+    setIsSendingTest(true);
+    const res = await sendDiscordTest(user?.name || '관리자');
+    setIsSendingTest(false);
+    if (res.sent) return showToast('테스트 알림을 보냈습니다. Discord 채널을 확인해 주세요.', 'success');
+    const reasons: Record<string, string> = {
+      not_configured: '서버에 DISCORD_WEBHOOK_URL이 설정되지 않았습니다.',
+      webhook_error: 'Discord가 요청을 거절했습니다. 웹후크 URL이 맞는지, 삭제되지 않았는지 확인해 주세요.',
+      rate_limited: '잠시 후 다시 시도해 주세요.',
+    };
+    showToast(reasons[res.reason || ''] || '테스트 알림을 보내지 못했습니다.', 'error');
+  };
 
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -182,7 +209,7 @@ export const SystemSettingsView: React.FC = () => {
   };
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const showSaveBar = section === 'general' || section === 'access' || section === 'policies' || section === 'social';
+  const showSaveBar = section === 'general' || section === 'access' || section === 'policies' || section === 'notifications' || section === 'social';
   const draft = policyDraft(policyTab);
   const draftArticles = parsePolicyText(draft.body);
   const isCustomPolicy = !!settings.policies?.[policyTab]?.body?.trim();
@@ -370,6 +397,78 @@ export const SystemSettingsView: React.FC = () => {
 
                 <p className="rounded-lg bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-800">
                   저장하면 바로 모든 사용자에게 적용됩니다. 내용이 바뀌면 운영 규정 제3조에 따라 시행 7일 전(불리한 변경은 30일 전)까지 공지사항으로 알려 주세요.
+                </p>
+              </div>
+            )}
+
+            {section === 'notifications' && (
+              <div className="max-w-2xl space-y-6">
+                <div
+                  className={`rounded-lg border px-4 py-4 ${
+                    discordConfigured ? 'border-emerald-200 bg-emerald-50/60' : discordConfigured === false ? 'border-amber-200 bg-amber-50/60' : 'border-neutral-200'
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="flex items-center gap-2 text-sm font-medium text-neutral-900">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          discordConfigured ? 'bg-emerald-500' : discordConfigured === false ? 'bg-amber-500' : 'bg-neutral-300'
+                        }`}
+                      />
+                      {discordConfigured === null
+                        ? '연결 상태를 확인하는 중…'
+                        : discordConfigured
+                          ? 'Discord 웹후크가 연결되어 있습니다.'
+                          : 'Discord 웹후크가 아직 연결되지 않았습니다.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleDiscordTest}
+                      disabled={!discordConfigured || isSendingTest}
+                      className="lms-btn lms-btn-secondary lms-btn-sm shrink-0"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      테스트 알림 보내기
+                    </button>
+                  </div>
+                  {discordConfigured === false && (
+                    <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[13px] leading-relaxed text-neutral-700">
+                      <li>
+                        Discord에서 알림을 받을 채널의 <b>채널 편집 → 연동 → 웹후크 → 새 웹후크</b>를 만들고 <b>웹후크 URL 복사</b>를 누릅니다.
+                      </li>
+                      <li>
+                        Render 대시보드의 LMS 서비스 → <b>Environment</b>에 이름 <code className="rounded bg-white px-1">DISCORD_WEBHOOK_URL</code>로 붙여 넣고
+                        저장합니다.
+                      </li>
+                      <li>재배포가 끝나면 이 화면에서 ‘테스트 알림 보내기’로 확인합니다.</li>
+                    </ol>
+                  )}
+                  <p className="mt-3 text-xs text-neutral-500">
+                    웹후크 URL을 가진 사람은 누구나 채널에 글을 올릴 수 있어서, URL은 이 화면이나 데이터베이스가 아닌 서버 환경 변수에만 저장합니다.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-neutral-100">
+                  <SettingRow title="수강 신청 · 배정" desc="직원이 강의를 수강 신청하거나 관리자가 수강을 배정하면 알립니다.">
+                    <Toggle checked={discordOn('enrollment')} onChange={(v) => setDiscordOn('enrollment', v)} label="수강 신청 · 배정 알림" />
+                  </SettingRow>
+                  <SettingRow title="수료" desc="직원이 과정을 수료하면 알립니다.">
+                    <Toggle checked={discordOn('completion')} onChange={(v) => setDiscordOn('completion', v)} label="수료 알림" />
+                  </SettingRow>
+                  <SettingRow title="문의 접수" desc="새 문의(로그인하지 않은 방문자의 문의 포함)가 들어오면 알립니다.">
+                    <Toggle checked={discordOn('inquiry')} onChange={(v) => setDiscordOn('inquiry', v)} label="문의 접수 알림" />
+                  </SettingRow>
+                  <SettingRow
+                    title="보안 · 이상 행동"
+                    desc="관리자 로그인, 관리자 로그인 실패 반복, 정지된 계정의 로그인 시도, 진도 조작 의심, 영상 건너뛰기 반복 시도, 그리고 권한 변경 · 사용자 삭제 · 강의 삭제 · 학습 기록 초기화 같은 관리 작업을 알립니다."
+                  >
+                    <Toggle checked={discordOn('security')} onChange={(v) => setDiscordOn('security', v)} label="보안 알림" />
+                  </SettingRow>
+                </div>
+
+                <p className="text-xs leading-relaxed text-neutral-500">
+                  알림에는 직원 이름, 강의명, 문의 제목이 들어가고 문의 본문은 보내지 않습니다. 보안 경고에는 확인에 필요한 계정과 접속 IP가 포함됩니다. 켜고 끈 설정은
+                  저장 후 1분 안에 적용됩니다.
                 </p>
               </div>
             )}

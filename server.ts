@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
 import { isCloudStorageEnabled, uploadToCloud, deleteFromCloud } from './cloudStorage';
+import { DiscordCategory, DiscordMessage, isDiscordConfigured, sendDiscord, WindowCounter } from './discordNotifier';
 
 dotenv.config();
 
@@ -545,6 +546,167 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'TDSNTLMS Auth & Learning Core', timestamp: new Date().toISOString() });
   });
+
+  // ==========================================
+  // DISCORD NOTIFICATIONS
+  // ==========================================
+
+  const clientIp = (req: express.Request) =>
+    String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+
+  // Category switches from 환경설정 > 알림 (system_settings/global.discordNotify). Missing means on.
+  let discordToggles: { at: number; value: Record<string, boolean> } | null = null;
+  const isDiscordCategoryOn = async (category: DiscordCategory) => {
+    if (!discordToggles || Date.now() - discordToggles.at > 60_000) {
+      let value: Record<string, boolean> = {};
+      try {
+        const snap = await getDoc(doc(fbDb, 'system_settings', 'global'));
+        value = (snap.exists() && (snap.data() as any).discordNotify) || {};
+      } catch {}
+      discordToggles = { at: Date.now(), value };
+    }
+    return discordToggles.value[category] !== false;
+  };
+
+  const notifyDiscord = async (message: DiscordMessage & { category: DiscordCategory }) =>
+    (await isDiscordCategoryOn(message.category)) ? sendDiscord(message) : false;
+
+  /** Display name for alerts raised by the server, which only knows the user id. */
+  const lookupLabels = async (userId?: string, courseId?: string) => {
+    let userLabel = userId || '-';
+    let courseLabel = courseId || '-';
+    try {
+      if (userId) {
+        const u = await getDoc(doc(fbDb, 'users', userId));
+        if (u.exists()) userLabel = `${(u.data() as any).name || userId} (${(u.data() as any).email || userId})`;
+      }
+      if (courseId) {
+        const c = await getDoc(doc(fbDb, 'courses', courseId));
+        if (c.exists()) courseLabel = (c.data() as any).title || courseId;
+      }
+    } catch {}
+    return { userLabel, courseLabel };
+  };
+
+  const ADMIN_ACTION_LABELS: Record<string, string> = {
+    UPDATE_ROLE: '권한 변경',
+    UPDATE_STATUS: '계정 상태 변경',
+    DELETE_USER: '사용자 삭제',
+    PASSWORD_CHANGE: '비밀번호 변경',
+    COURSE_DELETE: '강의 삭제',
+    BULK_DELETE: '일괄 삭제',
+    LEARNING_DATA_RESET: '학습 기록 초기화',
+  };
+  const SUSPICIOUS_LABELS: Record<string, string> = {
+    seek_skip: '아직 보지 않은 구간으로 건너뛰기를 반복 시도',
+  };
+
+  const notifyRate = new WindowCounter(5 * 60 * 1000);
+
+  app.get('/api/notify/status', (_req, res) => {
+    res.json({ configured: isDiscordConfigured() });
+  });
+
+  // Events reported by the browser (enrollments, inquiries, admin actions, …). The server builds the
+  // message from a fixed set of event kinds so the endpoint cannot be used to post arbitrary content.
+  app.post('/api/notify/event', async (req, res) => {
+    const ip = clientIp(req);
+    if (notifyRate.hit(`ip:${ip}`) > 40 || notifyRate.hit('all') > 300) {
+      return res.status(429).json({ sent: false, reason: 'rate_limited' });
+    }
+    const { kind, data } = req.body || {};
+    const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+    const v = (key: string, max = 120) => String(d[key] ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+    let message: (DiscordMessage & { category: DiscordCategory }) | null = null;
+    switch (kind) {
+      case 'enrollment':
+        message = {
+          category: 'enrollment',
+          title: '📚 수강 신청',
+          description: `**${v('userName')}**님이 「${v('courseTitle')}」 수강을 시작했습니다.`,
+          dedupeKey: `enroll:${v('userId')}:${v('courseId')}`,
+        };
+        break;
+      case 'assignment':
+        message = {
+          category: 'enrollment',
+          title: '🗂️ 수강 배정',
+          description: v('details', 300) || `${v('actorName')}님이 수강을 배정했습니다.`,
+          fields: [{ name: '관리자', value: v('actorName') }],
+        };
+        break;
+      case 'completion':
+        message = {
+          category: 'completion',
+          title: '🎓 과정 수료',
+          description: `**${v('userName')}**님이 「${v('courseTitle')}」 과정을 수료했습니다.`,
+          dedupeKey: `complete:${v('userId')}:${v('courseId')}`,
+        };
+        break;
+      case 'inquiry':
+        message = {
+          category: 'inquiry',
+          title: '💬 새 문의',
+          description: `「${v('title', 100)}」\n관리자 콘솔 › 문의 관리에서 답변해 주세요.`,
+          fields: [
+            { name: '유형', value: v('categoryLabel') },
+            { name: '보낸 사람', value: v('userName') + (d.guest ? ' (비회원)' : '') },
+          ],
+          dedupeKey: `inquiry:${v('inquiryId')}`,
+        };
+        break;
+      case 'admin_action': {
+        const label = ADMIN_ACTION_LABELS[v('action')];
+        if (!label) return res.status(400).json({ sent: false, reason: 'unknown_action' });
+        message = {
+          category: 'security',
+          title: `🛡️ 관리 작업 · ${label}`,
+          description: v('details', 300),
+          fields: [{ name: '관리자', value: v('actorName') }],
+        };
+        break;
+      }
+      case 'suspicious': {
+        const label = SUSPICIOUS_LABELS[v('reason')];
+        if (!label) return res.status(400).json({ sent: false, reason: 'unknown_reason' });
+        message = {
+          category: 'security',
+          title: '⚠️ 이상 행동 감지',
+          description: label,
+          fields: [
+            { name: '사용자', value: v('userName') },
+            { name: '강의', value: v('courseTitle') },
+            { name: '차시', value: v('lessonTitle') },
+            { name: '횟수', value: v('count') },
+          ],
+          dedupeKey: `suspicious:${v('reason')}:${v('userId')}:${v('lessonId')}`,
+        };
+        break;
+      }
+      case 'test': {
+        if (!isDiscordConfigured()) return res.json({ sent: false, reason: 'not_configured' });
+        if (notifyRate.hit(`test:${ip}`) > 5) return res.status(429).json({ sent: false, reason: 'rate_limited' });
+        const sent = await sendDiscord({
+          category: 'test',
+          title: '✅ 테스트 알림',
+          description: 'TDSNT LMS와 Discord 웹훅이 연결되었습니다. 앞으로 선택한 알림이 이 채널로 옵니다.',
+          fields: [{ name: '보낸 사람', value: v('actorName') || '-' }],
+        });
+        return res.json({ sent, reason: sent ? undefined : 'webhook_error' });
+      }
+      default:
+        return res.status(400).json({ sent: false, reason: 'unknown_kind' });
+    }
+
+    if (!isDiscordConfigured()) return res.json({ sent: false, reason: 'not_configured' });
+    const sent = await notifyDiscord(message);
+    return res.json({ sent });
+  });
+
+  // Server-side detections
+  const adminLoginFailures = new WindowCounter(15 * 60 * 1000);
+  const spoofedHeartbeats = new WindowCounter(30 * 60 * 1000);
 
   // API Auth Session Verification Endpoint
   app.get('/api/auth/session', (req, res) => {
@@ -1458,6 +1620,15 @@ async function startServer() {
       }
 
       if (adminAcc.status === 'suspended') {
+        notifyDiscord({
+          category: 'security',
+          title: '⚠️ 정지된 관리자 계정 로그인 시도',
+          fields: [
+            { name: '계정', value: cleanEmail },
+            { name: 'IP', value: clientIp(req) },
+          ],
+          dedupeKey: `suspended-login:${cleanEmail}:${Math.floor(Date.now() / 3_600_000)}`,
+        }).catch(() => {});
         return res.status(403).json({ success: false, message: '이용이 정지된 관리자 계정입니다. 시스템 총괄자에게 문의하세요.' });
       }
 
@@ -1466,6 +1637,18 @@ async function startServer() {
                       verifyPassword(rawPassword.trim(), adminAcc.hash, adminAcc.salt);
 
       if (!isMatch) {
+        const failures = adminLoginFailures.hit(cleanEmail);
+        if (failures === 5 || failures === 20) {
+          notifyDiscord({
+            category: 'security',
+            title: '⚠️ 관리자 로그인 실패 반복',
+            description: `15분 안에 비밀번호가 ${failures}번 틀렸습니다. 본인이 아니라면 비밀번호를 바꿔 주세요.`,
+            fields: [
+              { name: '계정', value: cleanEmail },
+              { name: 'IP', value: clientIp(req) },
+            ],
+          }).catch(() => {});
+        }
         return res.status(401).json({ success: false, message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
       }
 
@@ -1482,6 +1665,18 @@ async function startServer() {
         role: finalRole,
         createdAt: Date.now(),
       });
+
+      // Every admin sign-in is posted so a login by someone else is noticed quickly.
+      notifyDiscord({
+        category: 'security',
+        title: '🔐 관리자 로그인',
+        description: '관리자 계정으로 로그인했습니다. 본인이 아니라면 바로 비밀번호를 바꿔 주세요.',
+        fields: [
+          { name: '계정', value: `${finalName} (${adminAcc.email})` },
+          { name: 'IP', value: clientIp(req) },
+        ],
+        dedupeKey: `admin-login:${adminAcc.email}:${clientIp(req)}:${Math.floor(Date.now() / (6 * 3_600_000))}`,
+      }).catch(() => {});
 
       return res.json({
         success: true,
@@ -3001,6 +3196,32 @@ async function startServer() {
     const prevPosition = session.lastPosition || 0;
     session.lastPosition = validCurrentPos;
     session.lastUpdated = new Date().toISOString();
+
+    // The player only reports forward steps of at most 15 seconds inside the video. Anything else means
+    // the request was crafted by hand, so repeated cases are reported as suspicious.
+    if (Array.isArray(interval) && interval.length === 2 && session.duration > 0) {
+      const [a, b] = interval.map(Number);
+      const forged = !(b > a && b - a <= 15 && a >= 0) || b > session.duration + 5;
+      if (forged && spoofedHeartbeats.hit(sessionKey) === 3) {
+        const ip = clientIp(req); // read now: the socket is released once the response is sent
+        lookupLabels(userId, courseId)
+          .then(({ userLabel, courseLabel }) =>
+            notifyDiscord({
+              category: 'security',
+              title: '⚠️ 이상 행동 감지',
+              description: '정상 플레이어가 보내지 않는 시청 기록(진도 조작 의심)이 반복해서 들어왔습니다. 해당 기록은 진도에 반영되지 않았습니다.',
+              fields: [
+                { name: '사용자', value: userLabel },
+                { name: '강의', value: courseLabel },
+                { name: '차시 ID', value: String(lessonId) },
+                { name: 'IP', value: ip },
+              ],
+              dedupeKey: `forged-heartbeat:${sessionKey}`,
+            })
+          )
+          .catch(() => {});
+      }
+    }
 
     // Process interval if provided and legitimate
     if (Array.isArray(interval) && interval.length === 2 && session.duration > 0) {
