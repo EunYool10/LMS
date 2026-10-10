@@ -3,7 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Avatar } from './Avatar';
 import { NotificationDropdown } from './NotificationDropdown';
 import { BrandLogo } from './BrandLogo';
-import { ChevronDown, LayoutDashboard, LogOut, Megaphone, Menu, Settings, Shield, X } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, LogOut, Menu, MessageSquareText, Settings, Shield, X } from 'lucide-react';
+import { useInquirySummary } from '../../services/inquiries';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
 import { getRoleLabel } from '../../utils/rbac';
 
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const { openCount, unreadAnswers } = useInquirySummary(user);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -35,9 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
 
   const isAdminView = currentView.startsWith('admin');
   const links = [
-    { id: 'nav-link-courses', label: '강의', view: 'home', active: currentView === 'home' || currentView === 'course-detail', show: true },
-    { id: 'nav-link-my-learning', label: '내 학습', view: 'dashboard', active: currentView === 'dashboard', show: isAuthenticated },
-    { id: 'nav-link-admin-console', label: '관리자', view: 'admin-dashboard', active: isAdminView, show: isAdmin },
+    { id: 'nav-link-courses', label: '강의', view: 'home', active: currentView === 'home' || currentView === 'course-detail', show: true, badge: 0 },
+    { id: 'nav-link-my-learning', label: '내 학습', view: 'dashboard', active: currentView === 'dashboard', show: isAuthenticated, badge: 0 },
+    { id: 'nav-link-admin-console', label: '관리자', view: 'admin-dashboard', active: isAdminView, show: isAdmin, badge: openCount },
   ].filter((l) => l.show);
 
   const menuItem =
@@ -61,6 +63,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
               }`}
             >
               {l.label}
+              {l.badge > 0 && (
+                <span
+                  className="ml-1.5 min-w-[18px] rounded-full bg-amber-500 px-1 text-center text-[11px] font-semibold leading-[18px] text-white tabular-nums"
+                  title={`답변 대기 문의 ${l.badge}건`}
+                >
+                  {l.badge > 99 ? '99+' : l.badge}
+                </span>
+              )}
               {l.active && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />}
             </button>
           ))}
@@ -106,15 +116,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                     <LayoutDashboard className="w-4 h-4 text-neutral-400" />
                     내 학습
                   </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => go('support', unreadAnswers > 0 ? 'history' : undefined)}
+                    className={menuItem}
+                  >
+                    <MessageSquareText className="w-4 h-4 text-neutral-400" />
+                    문의하기
+                    {unreadAnswers > 0 && <span className="ml-auto text-xs font-semibold text-rose-600">새 답변 {unreadAnswers}</span>}
+                  </button>
                   {isAdmin && (
                     <>
                       <button type="button" role="menuitem" onClick={() => go('admin-dashboard')} className={menuItem}>
                         <Shield className="w-4 h-4 text-neutral-400" />
                         관리자 콘솔
                       </button>
-                      <button type="button" role="menuitem" onClick={() => go('admin-settings')} className={menuItem}>
-                        <Megaphone className="w-4 h-4 text-neutral-400" />
-                        시스템 설정 · 공지
+                      <button type="button" role="menuitem" onClick={() => go('admin-inquiries')} className={menuItem}>
+                        <MessageSquareText className="w-4 h-4 text-neutral-400" />
+                        문의 관리
+                        {openCount > 0 && <span className="ml-auto text-xs font-semibold text-amber-600">대기 {openCount}</span>}
                       </button>
                     </>
                   )}
@@ -185,6 +206,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 }`}
               >
                 프로필 · 계정 설정
+              </button>
+            )}
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => go('support', unreadAnswers > 0 ? 'history' : undefined)}
+                className={`flex w-full items-center rounded-md px-3 py-2.5 text-left text-[15px] font-medium cursor-pointer ${
+                  currentView === 'support' ? 'bg-brand-50 text-brand-700' : 'text-neutral-700 hover:bg-neutral-100'
+                }`}
+              >
+                문의하기
+                {unreadAnswers > 0 && <span className="ml-auto text-xs font-semibold text-rose-600">새 답변 {unreadAnswers}</span>}
               </button>
             )}
           </nav>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserAgreements, UserRole } from '../types';
 import { storage } from '../services/storage';
 import { authApi } from '../services/authApi';
 import { useToast } from './ToastContext';
@@ -16,7 +16,7 @@ interface AuthContextType {
   isStudent: boolean;
   isLoadingSession: boolean;
   login: (email: string, password?: string) => Promise<User | null>;
-  register: (name: string, email: string, password?: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string, agreements: UserAgreements) => Promise<boolean>;
   logout: () => void;
   updateProfile: (data: { name?: string; nickname?: string; phone?: string; bio?: string; email?: string }) => void | Promise<void>;
   updateAvatar: (avatarUrl: string | null) => void;
@@ -381,10 +381,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (
     name: string,
     email: string,
-    password = ''
+    password: string,
+    agreements: UserAgreements
   ): Promise<boolean> => {
     try {
-      const res = await authApi.register(name, email, password);
+      const res = await authApi.register(name, email, password, agreements);
       if (res.success && res.user) {
         storage.setCurrentUser(res.user);
         setUser(res.user);

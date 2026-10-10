@@ -62,6 +62,8 @@
 ### 3.1 라우팅
 `src/App.tsx`의 `currentView` 문자열로 화면을 바꿉니다(URL 라우터 없음). `handleNavigate(view, param)`로 이동합니다.
 
+로그인하지 않은 방문자에게는 `pages/LoginGatePage.tsx`(로그인 · 회원가입 · 비회원 문의 · 정책 링크)만 보입니다. 강의와 공지는 로그인 후에만 렌더링합니다.
+
 ### 3.2 전역 레이아웃
 
 ```text
@@ -82,6 +84,7 @@
 | `dashboard` | `pages/DashboardPage.tsx` → `components/student/StudentDashboard.tsx` | 숫자 띠 + 탭 목록(수강 중·수료·관심·메모·평가) + 이번 주 학습 |
 | `account-settings` | `components/profile/AccountSettings.tsx` | 왼쪽 메뉴(기본 정보·보안·학습 현황) + 내용 |
 | `user-profile` | `pages/UserProfilePage.tsx` | 프로필 머리 + 수강 과정 |
+| `support` | `pages/SupportPage.tsx` | 탭(새 문의 · 내 문의 내역) + 문의 안내 · 정책 문서 카드. `param='history'`면 내역 탭으로 엽니다 |
 
 업적·배지·프로필 테두리 기능은 2026년 10월에 화면에서 제거했습니다(저장소 함수는 남아 있음).
 
@@ -93,12 +96,13 @@
 |---|---|---|
 | 대시보드 | `admin-dashboard` | 통합 검색, 숫자 띠, 홈 공지 상태, 최근 강의, 최근 활동 |
 | 공지사항 | `admin-announcements` | 전사 공지(홈 상단 띠) · 강의별 공지 |
+| 문의 관리 | `admin-inquiries` | 답변 대기/완료 필터, 답변 등록·수정, 비회원 문의는 메일로 답장, 삭제. 대기 건수는 사이드바 · 상단바 · 홈 바로가기에 배지로 표시 |
 | 강의 관리 | `admin-courses` | 목록, 일괄 삭제, **수강 배정**, 편집기(`admin-courses-create` / `admin-courses-edit`) |
 | 문제 · 퀴즈 | `admin-questions` | 강의별 문제 은행 |
 | 학습 현황 | `admin-analytics` | **과정별 이수**(미이수자, 수강 배정, 독려 메일, CSV) · 수강생 기록 · 통계 |
 | 수료증 조회 | `admin-certificates` | 인증번호 진위 검증, 발급 대장 |
 | 사용자 · 권한 | `admin-users` | 사용자 목록, 권한, 감사 로그 |
-| 환경설정 | `admin-settings` | 정책 링크, 가입/점검 모드, 소셜 로그인 키(서비스 총괄 전용) |
+| 환경설정 | `admin-settings` | 일반, 가입/점검 모드, **약관 · 정책 편집**(운영 규정 · 개인정보처리방침), 소셜 로그인 키, 관리자 계정, 데이터 관리(서비스 총괄 전용) |
 
 **강의 편집기**(`pages/admin/AdminCourseEditorPage.tsx`)는 4단계입니다: 기본 정보 → 커리큘럼(`CurriculumManager`: 섹션·영상·퀴즈·평가) → 수강 설정(완료 기준·학습 목표·태그·강의 공지) → 검토·게시.
 
@@ -126,7 +130,10 @@
 2. 쓰기는 `storage`가 localStorage에 저장하고 `firestoreService`로 Firestore에 비동기 반영합니다.
 3. 앱 시작 시 `storage.syncFromFirestore()`가 사용자 · 강의 · 섹션 · 레슨 · 공지 · 설정을 내려받습니다.
 4. 같은 동기화에서 **수강 등록(enrollments)과 레슨 진도(progress)** 도 내려받습니다. 관리자는 전체, 수강생은 본인 기록만 받습니다. 그래서 관리자가 배정한 강의가 직원 기기에 나타나고, 학습 현황이 실제 데이터로 계산됩니다(`storage.mergeRemoteLearningData`).
-5. 앱 내 알림(`addNotification`)은 아직 해당 브라우저에만 저장됩니다. 직원에게 이수를 독려할 때는 학습 현황의 **독려 메일**(숨은 참조로 메일 앱을 엶)을 씁니다.
+5. **문의**(`services/inquiries.ts`)는 Firestore `system_settings` 컬렉션에 `inquiry_*` 문서(`kind: 'inquiry'`)로 저장합니다. 배포된 Firestore 규칙이 목록에 없는 새 컬렉션 쓰기를 막기 때문입니다. 규칙에 `inquiries` 컬렉션을 추가할 수 있게 되면 `firestoreService.saveInquiry/getInquiries`만 바꾸면 됩니다.
+6. **약관 · 정책**은 `data/policyData.ts`의 기본 문구를 쓰고, 관리자가 환경설정에서 고치면 `settings.policies.terms/privacy`에 저장됩니다(`services/policies.ts`의 `getPolicyDocument`). 본문 형식: `## 제1조 목적` 줄이 조항 제목, 나머지 줄은 한 줄이 한 문단.
+7. **가입 동의**: 이메일 가입은 회원가입 창에서 필수 약관 2개에 동의해야 하며(서버도 확인), 동의 시각을 `user.agreements`에 저장합니다. SNS로 처음 가입한 계정은 `ConsentGate`에서 동의해야 서비스를 쓸 수 있습니다(2026-10-11 이전 계정은 묻지 않음, `services/consent.ts`).
+8. 앱 내 알림(`addNotification`)은 아직 해당 브라우저에만 저장됩니다. 직원에게 이수를 독려할 때는 학습 현황의 **독려 메일**(숨은 참조로 메일 앱을 엶)을 씁니다.
 
 ---
 

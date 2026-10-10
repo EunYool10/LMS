@@ -1,4 +1,4 @@
-import { User, UserRole } from '../types';
+import { User, UserAgreements, UserRole } from '../types';
 import { storage } from './storage';
 import { firestoreService } from './firebase';
 
@@ -261,7 +261,7 @@ export const authApi = {
   /**
    * General registration through server API.
    */
-  async register(name: string, email: string, password = ''): Promise<RegisterResponse> {
+  async register(name: string, email: string, password: string, agreements: UserAgreements): Promise<RegisterResponse> {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
@@ -294,6 +294,7 @@ export const authApi = {
           name: cleanName,
           email: cleanEmail,
           password,
+          agreements,
         }),
       });
 
@@ -304,6 +305,7 @@ export const authApi = {
             this.setToken(data.token);
           }
           // Persist user in local storage
+          data.user = { ...data.user, agreements: data.user.agreements || agreements };
           const existing = storage.getUserById(data.user.id);
           if (!existing) {
             storage.createUser(data.user);
@@ -331,6 +333,7 @@ export const authApi = {
         email: cleanEmail,
         role: 'USER', // Strictly student
         status: 'active',
+        agreements,
       });
 
       const dummyToken = `tdsnt_jwt_local_${Date.now()}`;

@@ -7,6 +7,7 @@ import { AdminGlobalSearch } from '../../components/admin/AdminGlobalSearch';
 import { AdminPageHeader, AdminPanel, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { Course, Enrollment, AuditLog, SystemAnnouncement } from '../../types';
 import { getRoleLabel } from '../../utils/rbac';
+import { useInquirySummary } from '../../services/inquiries';
 import { Activity, ChevronRight, Megaphone, PlusCircle } from 'lucide-react';
 
 interface AdminDashboardPageProps {
@@ -15,6 +16,7 @@ interface AdminDashboardPageProps {
 
 export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNavigate }) => {
   const { user, isSuperAdmin } = useAuth();
+  const { openCount: openInquiries } = useInquirySummary(user);
   const [isLoading, setIsLoading] = useState(true);
   const [analytics, setAnalytics] = useState(() => storage.getPlatformAnalytics());
   const [courses, setCourses] = useState<Course[]>(() => storage.getCourses(true));
@@ -130,13 +132,23 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
         ]}
       />
 
-      <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${activeAnnouncement ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-        <p className="min-w-0 flex-1 truncate text-sm text-neutral-800">
-          <span className="text-[13px] font-medium text-neutral-500">홈 상단 공지 · </span>
-          {activeAnnouncement ? activeAnnouncement.title || activeAnnouncement.content : '게시 중인 공지가 없습니다.'}
-        </p>
-        {linkButton('편집', () => onNavigate('admin-announcements'))}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${activeAnnouncement ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+          <p className="min-w-0 flex-1 truncate text-sm text-neutral-800">
+            <span className="text-[13px] font-medium text-neutral-500">홈 상단 공지 · </span>
+            {activeAnnouncement ? activeAnnouncement.title || activeAnnouncement.content : '게시 중인 공지가 없습니다.'}
+          </p>
+          {linkButton('편집', () => onNavigate('admin-announcements'))}
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${openInquiries > 0 ? 'bg-amber-500' : 'bg-neutral-300'}`} />
+          <p className="min-w-0 flex-1 truncate text-sm text-neutral-800">
+            <span className="text-[13px] font-medium text-neutral-500">문의 · </span>
+            {openInquiries > 0 ? `답변을 기다리는 문의 ${openInquiries}건` : '답변 대기 중인 문의가 없습니다.'}
+          </p>
+          {linkButton(openInquiries > 0 ? '답변하기' : '보기', () => onNavigate('admin-inquiries'))}
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">

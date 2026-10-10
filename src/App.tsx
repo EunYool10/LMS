@@ -4,6 +4,7 @@ import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AuthModal } from './components/auth/AuthModal';
+import { ConsentGate } from './components/auth/ConsentGate';
 import { PolicyModal } from './components/common/PolicyModal';
 import { MobileNotificationModal } from './components/common/MobileNotificationModal';
 import { AdminSidebar } from './components/admin/AdminSidebar';
@@ -16,6 +17,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { AccountSettings } from './components/profile/AccountSettings';
 import { UserProfilePage } from './pages/UserProfilePage';
 import { LoginGatePage } from './pages/LoginGatePage';
+import { SupportPage } from './pages/SupportPage';
 import { BackToTop } from './components/common/BackToTop';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
@@ -28,6 +30,7 @@ import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
 import { AdminCertificatesPage } from './pages/admin/AdminCertificatesPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { AdminInquiriesPage } from './pages/admin/AdminInquiriesPage';
 import { AdminAnnouncementsPage } from './pages/admin/AdminAnnouncementsPage';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 
@@ -130,6 +133,7 @@ const AppContent: React.FC = () => {
                   )}
                   {currentView === 'admin-users' && <AdminUsersPage />}
                   {currentView === 'admin-settings' && <AdminSettingsPage />}
+                  {currentView === 'admin-inquiries' && <AdminInquiriesPage />}
                 </div>
               </main>
             </div>
@@ -160,6 +164,7 @@ const AppContent: React.FC = () => {
               {currentView === 'account-settings' && (
                 <AccountSettings onNavigateToCourse={(courseId) => handleNavigate('course-detail', courseId)} />
               )}
+              {currentView === 'support' && <SupportPage key={viewParam || 'new'} initialTab={viewParam === 'history' ? 'history' : 'new'} />}
             </ErrorBoundary>
           </main>
         )}
@@ -179,6 +184,9 @@ const AppContent: React.FC = () => {
 
       {/* Internal Policy Modal (Terms & Privacy) */}
       <PolicyModal />
+
+      {/* SNS sign-ups that skipped the sign-up form agree to the terms here */}
+      <ConsentGate />
 
       {/* Mobile Notification Bottom Sheet / Modal */}
       <MobileNotificationModal onNavigate={handleNavigate} />

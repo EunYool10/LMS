@@ -42,7 +42,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
     {
       title: '지원',
       links: [
-        { label: '문의하기', href: `mailto:${contactEmail}` },
+        { label: '문의하기', onClick: () => go('support') },
         { label: '개인정보처리방침', onClick: () => openPolicyModal('privacy') },
         { label: '운영 규정', onClick: () => openPolicyModal('terms') },
       ],

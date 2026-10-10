@@ -2061,7 +2061,7 @@ async function startServer() {
 
   // API Auth Register Endpoint
   app.post('/api/auth/register', (req, res) => {
-    const { name, email, password } = req.body || {};
+    const { name, email, password, agreements } = req.body || {};
     const cleanName = (name || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -2100,14 +2100,20 @@ async function startServer() {
       return res.status(400).json({ success: false, message: '비밀번호는 최소 6자 이상이어야 합니다.' });
     }
 
+    if (!agreements?.terms || !agreements?.privacy) {
+      return res.status(400).json({ success: false, message: '운영 규정과 개인정보 수집·이용에 동의해야 가입할 수 있습니다.' });
+    }
+
     // Strictly enforce USER (student) role for registrations (no dummy avatar)
+    const now = new Date().toISOString();
     const newUser = {
       id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       name: cleanName,
       email: cleanEmail,
       role: 'USER',
       status: 'active',
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      agreements: { terms: now, privacy: now },
     };
 
     const token = `tdsnt_jwt_usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;

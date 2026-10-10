@@ -1,5 +1,6 @@
 import {
   User,
+  UserAgreements,
   UserStatus,
   UserRole,
   AuditLog,
@@ -923,6 +924,28 @@ export class TDSNTLMSStorage {
     }
 
     return newUser;
+  }
+
+  /** Records when the user agreed to the terms and the privacy notice. */
+  public recordAgreements(userId: string, agreements: UserAgreements): User | undefined {
+    const users = this.getUsers();
+    const cur = this.getCurrentUser();
+    let target = users.find((u) => u.id === userId);
+    if (!target && cur && cur.id === userId) {
+      target = { ...cur };
+      users.push(target);
+    }
+    if (!target) return undefined;
+
+    target.agreements = agreements;
+    this.set(STORAGE_KEYS.USERS, users);
+    if (cur && cur.id === userId) {
+      this.setCurrentUser({ ...cur, agreements });
+    }
+    firestoreService.saveUser(target).catch((err) => {
+      console.warn('[Storage] Firestore saveUser error:', err);
+    });
+    return target;
   }
 
   public updateUserProfile(

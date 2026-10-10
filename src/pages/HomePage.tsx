@@ -9,7 +9,6 @@ import { EmptyState } from '../components/common/EmptyState';
 import { CourseCover } from '../components/common/CourseCover';
 import { LEGACY_CATEGORY_MAP, getCategoryById } from '../data/categoriesData';
 import {
-  ArrowRight,
   BarChart3,
   BookOpen,
   CheckCircle2,
@@ -18,12 +17,14 @@ import {
   Loader2,
   PlayCircle,
   RotateCcw,
+  MessageSquareText,
   Settings2,
   ShieldCheck,
   Users,
   X,
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { useInquirySummary } from '../services/inquiries';
 
 interface HomePageProps {
   onNavigate: (view: string, param?: string) => void;
@@ -34,6 +35,7 @@ const GRID = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const { user, isAuthenticated, isAdmin, openAuthModal } = useAuth();
+  const { openCount: openInquiries } = useInquirySummary(isAdmin ? user : null);
   const { showToast } = useToast();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -232,6 +234,41 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                 onSelectCourse={handleSelectCourse}
               />
             </div>
+
+            {isAdmin && (
+              <nav aria-label="관리자 바로가기" className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="mr-1 inline-flex items-center gap-1.5 text-[13px] font-medium text-neutral-500">
+                  <Settings2 className="h-4 w-4" />
+                  관리자 바로가기
+                </span>
+                {[
+                  { label: '강의 관리', view: 'admin-courses', icon: BookOpen, badge: 0 },
+                  { label: '사용자 관리', view: 'admin-users', icon: Users, badge: 0 },
+                  { label: '학습 현황', view: 'admin-analytics', icon: BarChart3, badge: 0 },
+                  { label: '문의 관리', view: 'admin-inquiries', icon: MessageSquareText, badge: openInquiries },
+                ].map(({ label, view, icon: Icon, badge }) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => onNavigate(view)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 text-[13px] font-medium text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900 cursor-pointer"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-neutral-400" />
+                    {label}
+                    {badge > 0 && (
+                      <span className="min-w-[18px] rounded-full bg-amber-500 px-1 text-center text-[11px] font-semibold leading-[18px] text-white tabular-nums">{badge}</span>
+                    )}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => onNavigate('admin-dashboard')}
+                  className="inline-flex h-8 items-center gap-0.5 px-1.5 text-[13px] font-medium text-brand-700 hover:underline cursor-pointer"
+                >
+                  관리자 콘솔 <ChevronRight className="h-4 w-4" />
+                </button>
+              </nav>
+            )}
           </div>
 
           {isAuthenticated && user ? (
@@ -299,29 +336,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       </section>
 
       <div className="lms-container space-y-10 py-8 sm:py-10">
-        {/* ── Admin shortcuts ── */}
-        {isAdmin && (
-          <section className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 text-sm font-semibold text-neutral-900 sm:mr-auto">
-              <Settings2 className="w-4 h-4 text-neutral-500" />
-              관리자 바로가기
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: '강의 관리', view: 'admin-courses', icon: BookOpen },
-                { label: '수강생 관리', view: 'admin-users', icon: Users },
-                { label: '학습 통계', view: 'admin-analytics', icon: BarChart3 },
-                { label: '관리자 콘솔', view: 'admin-dashboard', icon: ArrowRight },
-              ].map(({ label, view, icon: Icon }) => (
-                <button key={view} type="button" onClick={() => onNavigate(view)} className="lms-btn lms-btn-secondary lms-btn-sm">
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* ── Continue learning ── */}
         {isAuthenticated && inProgress.length > 0 && isDefaultHomeView && (
           <section id="section-continue-learning" className="space-y-4">

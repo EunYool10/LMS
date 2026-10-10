@@ -25,6 +25,7 @@ import {
   SystemAnnouncement,
   CourseAnnouncement,
   SystemSettings,
+  Inquiry,
 } from '../types';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
@@ -115,6 +116,7 @@ export const firestoreService = {
       if (user.naverId !== undefined) cleanData.naverId = user.naverId;
       if (user.googleId !== undefined) cleanData.googleId = user.googleId;
       if (user.provider !== undefined) cleanData.provider = user.provider;
+      if (user.agreements !== undefined) cleanData.agreements = user.agreements;
 
       await setDoc(userRef, cleanData, { merge: true });
       return true;
@@ -874,6 +876,41 @@ export const firestoreService = {
       console.warn('[Firestore] Failed to get system settings:', err);
     }
     return null;
+  },
+
+  // ====================================================
+  // INQUIRIES
+  // Stored in system_settings as `inquiry_*` docs tagged kind: 'inquiry', because the
+  // deployed Firestore rules reject writes to collections they do not list.
+  // Errors are thrown so the UI can tell the sender that delivery failed.
+  // ====================================================
+
+  async saveInquiry(inquiry: Inquiry): Promise<void> {
+    const clean = JSON.parse(JSON.stringify({ ...inquiry, kind: 'inquiry' }));
+    await setDoc(doc(db, 'system_settings', inquiry.id), clean);
+  },
+
+  async updateInquiry(id: string, patch: Partial<Inquiry>): Promise<void> {
+    await setDoc(doc(db, 'system_settings', id), JSON.parse(JSON.stringify(patch)), { merge: true });
+  },
+
+  /** All inquiries (admins) or one user's inquiries, newest first. */
+  async getInquiries(userId?: string): Promise<Inquiry[]> {
+    const base = collection(db, 'system_settings');
+    const q = userId
+      ? query(base, where('kind', '==', 'inquiry'), where('userId', '==', userId))
+      : query(base, where('kind', '==', 'inquiry'));
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => {
+        const { kind: _kind, ...rest } = d.data();
+        return { ...rest, id: d.id } as Inquiry;
+      })
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  },
+
+  async deleteInquiry(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'system_settings', id));
   },
 
   // Real-time listener for system announcements

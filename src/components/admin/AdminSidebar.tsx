@@ -14,7 +14,9 @@ import {
   X,
   Megaphone,
   LogOut,
+  MessageSquareText,
 } from 'lucide-react';
+import { useInquirySummary } from '../../services/inquiries';
 import { LogoutConfirmModal } from '../common/LogoutConfirmModal';
 import { getRoleLabel } from '../../utils/rbac';
 
@@ -28,6 +30,7 @@ interface MenuItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   superOnly?: boolean;
+  badge?: number;
 }
 
 interface MenuSection {
@@ -37,6 +40,7 @@ interface MenuSection {
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavigate }) => {
   const { user, isSuperAdmin, logout } = useAuth();
+  const { openCount } = useInquirySummary(user);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -46,6 +50,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
       items: [
         { id: 'admin-dashboard', label: '대시보드', icon: LayoutDashboard },
         { id: 'admin-announcements', label: '공지사항', icon: Megaphone },
+        { id: 'admin-inquiries', label: '문의 관리', icon: MessageSquareText, badge: openCount },
       ],
     },
     {
@@ -116,6 +121,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
                       >
                         <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-brand-600' : 'text-neutral-400'}`} />
                         <span className="truncate">{item.label}</span>
+                        {!!item.badge && (
+                          <span className="ml-auto min-w-[20px] rounded-full bg-amber-500 px-1.5 text-center text-[11px] font-semibold leading-5 text-white tabular-nums">
+                            {item.badge > 99 ? '99+' : item.badge}
+                          </span>
+                        )}
                       </button>
                     </li>
                   );

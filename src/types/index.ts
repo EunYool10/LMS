@@ -31,6 +31,13 @@ export interface User {
   naverId?: string;
   googleId?: string;
   provider?: 'email' | 'kakao' | 'naver' | 'google' | string;
+  /** When the user agreed to the terms and the privacy notice (ISO timestamps). */
+  agreements?: UserAgreements;
+}
+
+export interface UserAgreements {
+  terms: string;
+  privacy: string;
 }
 
 export interface AuditLog {
@@ -299,6 +306,42 @@ export interface SystemSettings {
   googleClientId?: string;
   /** Set when an admin wipes all enrollments/progress; clients clear their local caches once. */
   learningDataResetAt?: string;
+  /** Admin-edited policy text. Missing or null means the built-in default text is used. */
+  policies?: {
+    terms?: PolicyOverride | null;
+    privacy?: PolicyOverride | null;
+  };
+}
+
+export interface PolicyOverride {
+  effectiveDate: string;
+  overview: string;
+  /** Plain text: lines starting with "## " are article headings, every other non-empty line is a paragraph. */
+  body: string;
+  updatedAt: string;
+  updatedByName?: string;
+}
+
+export type InquiryCategory = 'learning' | 'account' | 'certificate' | 'bug' | 'other';
+export type InquiryStatus = 'open' | 'answered';
+
+export interface Inquiry {
+  id: string;
+  category: InquiryCategory;
+  title: string;
+  content: string;
+  status: InquiryStatus;
+  /** Missing for inquiries sent from the sign-in page by someone who is not logged in. */
+  userId?: string;
+  userName: string;
+  userEmail: string;
+  createdAt: string;
+  answer?: string;
+  answeredAt?: string;
+  answeredById?: string;
+  answeredByName?: string;
+  /** Set when the author opened the latest answer. */
+  answerSeenAt?: string;
 }
 
 export interface ToastMessage {

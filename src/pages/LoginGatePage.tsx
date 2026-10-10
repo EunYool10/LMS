@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Award, BookOpen, LineChart, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { openPolicyModal } from '../components/common/PolicyModal';
+import { GuestInquiryModal } from '../components/support/GuestInquiryModal';
 
 /**
  * Shown to visitors who are not signed in. The LMS is for TDS employees only,
@@ -11,6 +12,7 @@ import { openPolicyModal } from '../components/common/PolicyModal';
  */
 export const LoginGatePage: React.FC = () => {
   const { openAuthModal } = useAuth();
+  const [isInquiryOpen, setIsInquiryOpen] = useState(false);
   const settings = storage.getSettings();
   const allowRegistration = settings?.allowRegistration !== false;
 
@@ -85,9 +87,9 @@ export const LoginGatePage: React.FC = () => {
 
           <p className="mt-6 text-[13px] leading-relaxed text-neutral-500">
             계정이 없거나 로그인이 안 되면{' '}
-            <a href={`mailto:${settings?.contactEmail || 'teamdevstudiont@gmail.com'}`} className="font-medium text-brand-700 hover:underline">
+            <button type="button" onClick={() => setIsInquiryOpen(true)} className="font-medium text-brand-700 hover:underline cursor-pointer">
               관리자에게 문의
-            </a>
+            </button>
             해 주세요.
           </p>
         </div>
@@ -99,8 +101,13 @@ export const LoginGatePage: React.FC = () => {
           <button type="button" onClick={() => openPolicyModal('privacy')} className="hover:text-neutral-900 cursor-pointer">
             개인정보처리방침
           </button>
+          <button type="button" onClick={() => setIsInquiryOpen(true)} className="hover:text-neutral-900 cursor-pointer">
+            문의하기
+          </button>
         </div>
       </section>
+
+      <GuestInquiryModal isOpen={isInquiryOpen} onClose={() => setIsInquiryOpen(false)} />
     </div>
   );
 };

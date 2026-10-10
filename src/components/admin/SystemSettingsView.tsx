@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { storage } from '../../services/storage';
-import { SystemSettings } from '../../types';
+import { PolicyOverride, SystemSettings } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/authApi';
 import { openPolicyModal } from '../common/PolicyModal';
+import { defaultPolicy, formatKoreanDate, overrideToDocument, parsePolicyText, POLICY_LABELS, policyToText, PolicyType } from '../../services/policies';
 import { AdminPageHeader } from './AdminPageHeader';
 import { BaseModal } from '../common/BaseModal';
-import { AlertTriangle, Check, Copy, Database, ExternalLink, Eye, EyeOff, KeyRound, Lock, LogIn, Save, Settings, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Database, Eye, EyeOff, FileText, KeyRound, Lock, LogIn, RotateCcw, Save, Settings, ShieldCheck } from 'lucide-react';
 
-type Section = 'general' | 'access' | 'social' | 'admins' | 'data';
+type Section = 'general' | 'access' | 'policies' | 'social' | 'admins' | 'data';
 
 const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: '일반', icon: Settings },
   { id: 'access', label: '접근 · 보안', icon: ShieldCheck },
+  { id: 'policies', label: '약관 · 정책', icon: FileText },
   { id: 'social', label: '소셜 로그인', icon: LogIn },
   { id: 'admins', label: '관리자 계정', icon: KeyRound },
   { id: 'data', label: '데이터 관리', icon: Database },
@@ -81,6 +83,8 @@ export const SystemSettingsView: React.FC = () => {
   const [showPw, setShowPw] = useState(false);
   const [isChangingPw, setIsChangingPw] = useState(false);
 
+  const [policyTab, setPolicyTab] = useState<PolicyType>('terms');
+
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isResetting, setIsResetting] = useState(false);
@@ -96,6 +100,25 @@ export const SystemSettingsView: React.FC = () => {
     setSettings((prev) => ({ ...prev, ...patch }));
     setIsDirty(true);
   };
+
+  /** The policy as it currently stands in the form: the edited version, or the built-in text. */
+  const policyDraft = (type: PolicyType): PolicyOverride => {
+    const saved = settings.policies?.[type];
+    if (saved && saved.body?.trim()) return saved;
+    const d = defaultPolicy(type);
+    return { effectiveDate: d.effectiveDate, overview: d.overview, body: policyToText(d.articles), updatedAt: '' };
+  };
+
+  const updatePolicy = (type: PolicyType, patch: Partial<PolicyOverride>) => {
+    update({
+      policies: {
+        ...settings.policies,
+        [type]: { ...policyDraft(type), ...patch, updatedAt: new Date().toISOString(), updatedByName: user?.name },
+      },
+    });
+  };
+
+  const resetPolicy = (type: PolicyType) => update({ policies: { ...settings.policies, [type]: null } });
 
   const handleSave = async () => {
     storage.saveSettings(settings);
@@ -159,7 +182,10 @@ export const SystemSettingsView: React.FC = () => {
   };
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const showSaveBar = section === 'general' || section === 'access' || section === 'social';
+  const showSaveBar = section === 'general' || section === 'access' || section === 'policies' || section === 'social';
+  const draft = policyDraft(policyTab);
+  const draftArticles = parsePolicyText(draft.body);
+  const isCustomPolicy = !!settings.policies?.[policyTab]?.body?.trim();
   const current = SECTIONS.find((s) => s.id === section)!;
 
   const socialBlocks = [
@@ -242,41 +268,10 @@ export const SystemSettingsView: React.FC = () => {
                   <Field label="플랫폼 이름">
                     <input type="text" value={settings.platformName} onChange={(e) => update({ platformName: e.target.value })} className="lms-input" />
                   </Field>
-                  <Field label="문의 이메일" hint="푸터와 안내 문구에 표시됩니다.">
+                  <Field label="문의 이메일" hint="문의하기 화면과 푸터에 ‘급한 문의’ 연락처로 표시됩니다.">
                     <input type="email" value={settings.contactEmail} onChange={(e) => update({ contactEmail: e.target.value })} className="lms-input" />
                   </Field>
                 </div>
-                {(
-                  [
-                    { label: '운영 규정 링크', key: 'termsUrl', modal: 'terms' },
-                    { label: '개인정보처리방침 링크', key: 'privacyUrl', modal: 'privacy' },
-                  ] as const
-                ).map((f) => (
-                  <Field
-                    key={f.key}
-                    label={f.label}
-                    action={
-                      <span className="flex items-center gap-3 text-xs">
-                        <button type="button" onClick={() => openPolicyModal(f.modal)} className="font-medium text-brand-700 hover:underline cursor-pointer">
-                          미리보기
-                        </button>
-                        {settings[f.key] && (
-                          <a href={settings[f.key]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-neutral-500 hover:text-neutral-800">
-                            열기 <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </span>
-                    }
-                  >
-                    <input
-                      type="url"
-                      value={settings[f.key] || ''}
-                      onChange={(e) => update({ [f.key]: e.target.value } as Partial<SystemSettings>)}
-                      placeholder="https://"
-                      className="lms-input font-mono text-[13px]"
-                    />
-                  </Field>
-                ))}
               </div>
             )}
 
@@ -288,6 +283,94 @@ export const SystemSettingsView: React.FC = () => {
                 <SettingRow title="점검 모드" desc="켜면 관리자를 제외한 사용자의 접속이 제한됩니다.">
                   <Toggle checked={settings.maintenanceMode} onChange={(v) => update({ maintenanceMode: v })} label="점검 모드" danger />
                 </SettingRow>
+              </div>
+            )}
+
+            {section === 'policies' && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="inline-flex self-start rounded-lg bg-neutral-100 p-1" role="tablist">
+                    {(['terms', 'privacy'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="tab"
+                        aria-selected={policyTab === t}
+                        onClick={() => setPolicyTab(t)}
+                        className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                          policyTab === t ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500 hover:text-neutral-900'
+                        }`}
+                      >
+                        {POLICY_LABELS[t]}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    {isCustomPolicy
+                      ? `직접 수정한 문구 · ${formatKoreanDate(draft.updatedAt)}${draft.updatedByName ? ` ${draft.updatedByName}` : ''}`
+                      : '기본 문구를 사용하고 있어요.'}
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-[240px_minmax(0,1fr)]">
+                  <Field label="시행일">
+                    <input
+                      type="text"
+                      value={draft.effectiveDate}
+                      onChange={(e) => updatePolicy(policyTab, { effectiveDate: e.target.value })}
+                      placeholder="2026년 1월 1일"
+                      className="lms-input"
+                    />
+                  </Field>
+                </div>
+
+                <Field label="개요" hint="문서 맨 위에 요약으로 표시됩니다.">
+                  <textarea
+                    value={draft.overview}
+                    onChange={(e) => updatePolicy(policyTab, { overview: e.target.value })}
+                    rows={3}
+                    className="lms-input h-auto resize-y py-2.5 leading-relaxed"
+                  />
+                </Field>
+
+                <Field
+                  label="본문"
+                  action={
+                    <span className="flex items-center gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => openPolicyModal(policyTab, overrideToDocument(policyTab, { ...draft, updatedAt: draft.updatedAt || new Date().toISOString() }))}
+                        className="font-medium text-brand-700 hover:underline cursor-pointer"
+                      >
+                        미리보기
+                      </button>
+                      {isCustomPolicy && (
+                        <button type="button" onClick={() => resetPolicy(policyTab)} className="inline-flex items-center gap-1 text-neutral-500 hover:text-neutral-900 cursor-pointer">
+                          <RotateCcw className="h-3 w-3" />
+                          기본 문구로 되돌리기
+                        </button>
+                      )}
+                    </span>
+                  }
+                  hint={
+                    <>
+                      ‘## 제1조 목적’처럼 <code className="rounded bg-neutral-100 px-1">##</code>로 시작하는 줄이 조항 제목이 되고, 나머지 줄은 한 줄이 한 문단이 됩니다. 현재{' '}
+                      {draftArticles.length}개 조항
+                    </>
+                  }
+                >
+                  <textarea
+                    value={draft.body}
+                    onChange={(e) => updatePolicy(policyTab, { body: e.target.value })}
+                    rows={20}
+                    spellCheck={false}
+                    className="lms-input h-auto resize-y py-3 text-[13px] leading-relaxed"
+                  />
+                </Field>
+
+                <p className="rounded-lg bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-800">
+                  저장하면 바로 모든 사용자에게 적용됩니다. 내용이 바뀌면 운영 규정 제3조에 따라 시행 7일 전(불리한 변경은 30일 전)까지 공지사항으로 알려 주세요.
+                </p>
               </div>
             )}
 
