@@ -29,7 +29,7 @@ import { progressApi } from './progressApi';
 import { firestoreService } from './firebase';
 import { calculateCourseStats, extractYouTubeVideoId } from '../utils/duration';
 import { CATEGORIES_DATA, LEGACY_CATEGORY_MAP, getCategoryById } from '../data/categoriesData';
-import { isServiceOwner } from '../utils/rbac';
+import { isAdminRole, isServiceOwner } from '../utils/rbac';
 
 const STORAGE_KEYS = {
   USERS: 'tdsnt_users_v2',
@@ -713,11 +713,91 @@ export class TDSNTLMSStorage {
         firestoreService.saveSettings(localSettings).catch(() => {});
       }
 
+      // 8. Sync enrollments + lesson progress (admins: everyone, learners: themselves)
+      const me = this.getCurrentUser();
+      if (me) {
+        const scope = isAdminRole(me.role) ? undefined : me.id;
+        const [remoteEnrollments, remoteProgress] = await Promise.all([
+          firestoreService.getEnrollmentRecords(scope),
+          firestoreService.getProgressRecords(scope),
+        ]);
+        this.mergeRemoteLearningData(remoteEnrollments, remoteProgress);
+      }
+
       window.dispatchEvent(new Event('tdsnt_announcement_change'));
       window.dispatchEvent(new Event('storage'));
     } catch (e) {
       console.warn('[Storage] syncFromFirestore error:', e);
     }
+  }
+
+  /** Course progress % from lesson progress: completed lessons count 100, partial ones proportionally. */
+  private calcCourseProgress(userId: string, courseId: string, allProgress: LessonProgress[]): number {
+    const courseLessons = this.getLessons(courseId);
+    if (courseLessons.length === 0) return 0;
+    let sum = 0;
+    let allDone = true;
+    for (const cl of courseLessons) {
+      const prog = allProgress.find((p) => p.userId === userId && p.lessonId === cl.id);
+      if (prog?.isCompleted) {
+        sum += 100;
+      } else {
+        allDone = false;
+        if (prog && prog.totalSeconds > 0 && prog.watchedSeconds > 0) {
+          sum += Math.min(99, Math.round((prog.watchedSeconds / prog.totalSeconds) * 100));
+        }
+      }
+    }
+    return allDone ? 100 : Math.min(100, Math.round(sum / courseLessons.length));
+  }
+
+  /**
+   * Merge enrollments/progress written on other devices (e.g. courses assigned by an admin)
+   * into local storage and recompute course progress for the affected enrollments.
+   */
+  public mergeRemoteLearningData(
+    remoteEnrollments: Array<{ userId: string; courseId: string; enrolledAt?: string }>,
+    remoteProgress: LessonProgress[]
+  ): void {
+    if (remoteEnrollments.length === 0 && remoteProgress.length === 0) return;
+
+    const progress = this.getAllProgress();
+    const progressKey = (p: { userId: string; lessonId: string }) => `${p.userId}::${p.lessonId}`;
+    const progressMap = new Map(progress.map((p) => [progressKey(p), p]));
+    for (const rp of remoteProgress) {
+      const local = progressMap.get(progressKey(rp));
+      if (!local) {
+        progressMap.set(progressKey(rp), rp);
+      } else if (!local.isCompleted && (rp.isCompleted || (rp.watchedSeconds || 0) > (local.watchedSeconds || 0))) {
+        progressMap.set(progressKey(rp), { ...local, ...rp });
+      }
+    }
+    const mergedProgress = Array.from(progressMap.values());
+    this.set(STORAGE_KEYS.PROGRESS, mergedProgress);
+
+    const enrollments = this.getEnrollments();
+    const enrollmentKey = (e: { userId: string; courseId: string }) => `${e.userId}::${e.courseId}`;
+    const known = new Set(enrollments.map(enrollmentKey));
+    for (const re of remoteEnrollments) {
+      if (known.has(enrollmentKey(re))) continue;
+      known.add(enrollmentKey(re));
+      enrollments.push({
+        id: `enr_${re.userId}_${re.courseId}`,
+        userId: re.userId,
+        courseId: re.courseId,
+        enrolledAt: re.enrolledAt || new Date().toISOString(),
+        progressPercentage: 0,
+      });
+    }
+    // Progress-based fields are derived, so recompute them for every enrollment we know about
+    const touchedUsers = new Set([...remoteEnrollments.map((e) => e.userId), ...remoteProgress.map((p) => p.userId)]);
+    for (const enr of enrollments) {
+      if (!touchedUsers.has(enr.userId)) continue;
+      const pct = this.calcCourseProgress(enr.userId, enr.courseId, mergedProgress);
+      if (pct > enr.progressPercentage) enr.progressPercentage = pct;
+      if (enr.progressPercentage === 100 && !enr.completedAt) enr.completedAt = new Date().toISOString();
+    }
+    this.set(STORAGE_KEYS.ENROLLMENTS, enrollments);
   }
 
   private setupFirestoreListeners(): void {

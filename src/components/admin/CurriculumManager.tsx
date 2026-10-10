@@ -207,317 +207,234 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({ course, on
     reload();
   };
 
+  const iconBtn =
+    'rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer';
+
   return (
-    <div className="space-y-6">
-      {/* Visual Upload Progress Bar on Lecture Editing Page */}
+    <div className="space-y-5">
       {activeUpload && activeUpload.isUploading && (
-        <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-300 rounded-2xl shadow-sm space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Film className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-indigo-950 truncate max-w-xs sm:max-w-md">
-                    {activeUpload.lessonTitle || activeUpload.fileName}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-200">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-indigo-600" />
-                    서버 청크 분할 전송 중
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 truncate">
-                  파일명: <b className="font-mono text-slate-700">{activeUpload.fileName}</b> {activeUpload.bytesInfo ? `• ${activeUpload.bytesInfo}` : ''}
-                </p>
-              </div>
+        <div className="space-y-2 rounded-lg border border-brand-200 bg-brand-50/50 p-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-600" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-neutral-900">
+                {activeUpload.lessonTitle || activeUpload.fileName} 업로드 중
+              </p>
+              <p className="truncate text-xs text-neutral-500">
+                {activeUpload.fileName}
+                {activeUpload.bytesInfo ? ` · ${activeUpload.bytesInfo}` : ''}
+              </p>
             </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-sm font-bold text-indigo-700 tabular-nums">
-                {activeUpload.progress}%
-              </span>
-              <button
-                type="button"
-                onClick={activeUpload.onCancel}
-                className="py-1.5 px-3 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition-colors shadow-2xs flex items-center gap-1 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>업로드 취소</span>
-              </button>
-            </div>
+            <span className="text-sm font-semibold tabular-nums text-brand-700">{activeUpload.progress}%</span>
+            <button type="button" onClick={activeUpload.onCancel} className="lms-btn lms-btn-secondary lms-btn-sm text-rose-600">
+              <X className="h-3.5 w-3.5" />
+              취소
+            </button>
           </div>
-
-          {/* Visual Progress Track */}
-          <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden p-0.5 shadow-inner">
-            <div
-              className="bg-indigo-600 h-full rounded-full transition-all duration-150 relative overflow-hidden"
-              style={{ width: `${Math.max(4, activeUpload.progress)}%` }}
-            >
-              <div className="absolute inset-0 bg-white/25 animate-pulse" />
-            </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-neutral-200">
+            <div className="h-full rounded-full bg-brand-600 transition-all duration-150" style={{ width: `${Math.max(4, activeUpload.progress)}%` }} />
           </div>
-
-          <div className="flex items-center justify-between text-[10px] text-slate-500">
-            <span>청크 단위 분할 전송 (100MB 이하 검사 완료)</span>
-            <span>업로드 완료 시 첫 프레임이 대표 썸네일로 자동 추출됩니다 ✨</span>
-          </div>
+          <p className="text-xs text-neutral-500">업로드가 끝나면 영상의 첫 장면이 썸네일로 자동 지정됩니다.</p>
         </div>
       )}
 
-      {/* Header Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">커리큘럼 목차 및 콘텐츠 구성</h3>
-          <p className="text-xs text-slate-500">
-            총 {sections.length}개 섹션 • {lessons.length}개 콘텐츠
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsAddingSection(true)}
-          className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>새 섹션 추가</span>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-neutral-600">
+          섹션 <strong className="font-semibold text-neutral-900">{sections.length}</strong>개 · 항목{' '}
+          <strong className="font-semibold text-neutral-900">{lessons.length}</strong>개
+        </p>
+        <button type="button" onClick={() => setIsAddingSection(true)} className="lms-btn lms-btn-secondary lms-btn-sm">
+          <Plus className="h-4 w-4" />
+          섹션 추가
         </button>
       </div>
 
-      {/* Add Section Form */}
       {isAddingSection && (
-        <form onSubmit={handleAddSection} className="p-4 bg-white rounded-xl border-2 border-indigo-200 space-y-3">
-          <label className="block text-xs font-bold text-indigo-950">새 섹션 제목</label>
+        <form onSubmit={handleAddSection} className="flex flex-col gap-2 rounded-lg border border-brand-200 p-3 sm:flex-row">
+          <input
+            type="text"
+            required
+            autoFocus
+            value={newSectionTitle}
+            onChange={(e) => setNewSectionTitle(e.target.value)}
+            placeholder="새 섹션 제목 (예: 시작하기)"
+            aria-label="새 섹션 제목"
+            className="lms-input flex-1"
+          />
           <div className="flex gap-2">
-            <input
-              type="text"
-              required
-              autoFocus
-              value={newSectionTitle}
-              onChange={(e) => setNewSectionTitle(e.target.value)}
-              placeholder="예: 섹션 3: 심화 컴포넌트 패턴과 커스텀 훅"
-              className="flex-1 px-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              type="button"
-              onClick={() => setIsAddingSection(false)}
-              className="py-2 px-3 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200"
-            >
+            <button type="button" onClick={() => setIsAddingSection(false)} className="lms-btn lms-btn-ghost">
               취소
             </button>
-            <button
-              type="submit"
-              className="py-2 px-4 bg-indigo-600 text-white text-xs font-semibold rounded-lg shadow-xs hover:bg-indigo-700"
-            >
-              생성
+            <button type="submit" className="lms-btn lms-btn-primary">
+              추가
             </button>
           </div>
         </form>
       )}
 
-      {/* Sections List */}
-      <div className="space-y-4">
+      {sections.length === 0 && !isAddingSection && (
+        <div className="rounded-lg border border-dashed border-neutral-300 py-12 text-center">
+          <p className="text-sm text-neutral-600">아직 섹션이 없습니다.</p>
+          <p className="mt-1 text-xs text-neutral-500">섹션을 만든 뒤 그 안에 영상, 퀴즈, 평가를 추가하세요.</p>
+          <button type="button" onClick={() => setIsAddingSection(true)} className="lms-btn lms-btn-primary lms-btn-sm mt-4">
+            <Plus className="h-4 w-4" />첫 섹션 만들기
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-3">
         {sections.map((section, secIdx) => {
           const secLessons = lessons.filter((l) => l.sectionId === section.id).sort((a, b) => a.order - b.order);
 
           return (
-            <div key={section.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-              {/* Section Header */}
-              <div className="p-4 bg-slate-50/80 border-b border-slate-200/80 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">#{secIdx + 1}</span>
-                  <h4 className="text-sm font-bold text-slate-900">{section.title}</h4>
-                  <span className="text-[11px] text-slate-500">({secLessons.length}개 항목)</span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={secIdx === 0}
-                    onClick={() => handleMoveSection(secIdx, 'up')}
-                    className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                    title="위로 이동"
-                  >
-                    <ChevronUp className="w-4 h-4" />
+            <div key={section.id} className="overflow-hidden rounded-lg border border-neutral-200">
+              <div className="flex items-center gap-2 bg-neutral-50 px-3 py-2.5">
+                <span className="text-xs font-semibold tabular-nums text-neutral-400">{secIdx + 1}</span>
+                <h4 className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900">{section.title}</h4>
+                <span className="text-xs text-neutral-500">{secLessons.length}개</span>
+                <div className="flex items-center">
+                  <button type="button" disabled={secIdx === 0} onClick={() => handleMoveSection(secIdx, 'up')} className={iconBtn} title="위로" aria-label="섹션 위로">
+                    <ChevronUp className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
                     disabled={secIdx === sections.length - 1}
                     onClick={() => handleMoveSection(secIdx, 'down')}
-                    className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                    title="아래로 이동"
+                    className={iconBtn}
+                    title="아래로"
+                    aria-label="섹션 아래로"
                   >
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="h-4 w-4" />
                   </button>
-
-                  <div className="w-px h-4 bg-slate-200 mx-1" />
-
                   <button
                     type="button"
                     onClick={() => handleDeleteSection(section.id)}
-                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    className="rounded-md p-1.5 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
                     title="섹션 삭제"
+                    aria-label="섹션 삭제"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Section Content / Lessons */}
-              <div className="p-4 space-y-2.5">
-                {secLessons.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
-                    등록된 강의가 없습니다. 아래 버튼으로 영상이나 퀴즈를 추가하세요.
-                  </div>
-                ) : (
-                  secLessons.map((lesson, lesIdx) => {
-                    const questions = storage.getQuestions(lesson.id);
-
-                    return (
-                      <div
-                        key={lesson.id}
-                        className="p-3 bg-slate-50 hover:bg-slate-100/60 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 text-xs transition-colors"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-bold text-[11px] text-slate-500 shrink-0">
-                            {lesIdx + 1}
-                          </span>
-
-                          <div className="shrink-0">
-                            {lesson.type === 'video' && <Video className="w-4 h-4 text-indigo-600" />}
-                            {lesson.type === 'quiz' && <FileQuestion className="w-4 h-4 text-emerald-600" />}
-                            {lesson.type === 'exam' && <Award className="w-4 h-4 text-purple-600" />}
+              <ul className="divide-y divide-neutral-100">
+                {secLessons.length === 0 && (
+                  <li className="px-4 py-5 text-center text-xs text-neutral-500">이 섹션에 아직 항목이 없습니다.</li>
+                )}
+                {secLessons.map((lesson, lesIdx) => {
+                  const questions = storage.getQuestions(lesson.id);
+                  const isAssessment = lesson.type === 'quiz' || lesson.type === 'exam';
+                  return (
+                    <li key={lesson.id} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
+                          {lesson.type === 'video' && <Video className="h-4 w-4" />}
+                          {lesson.type === 'quiz' && <FileQuestion className="h-4 w-4" />}
+                          {lesson.type === 'exam' && <Award className="h-4 w-4" />}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-neutral-900">{lesson.title}</span>
+                            {lesson.isFreePreview && (
+                              <span className="shrink-0 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">미리보기</span>
+                            )}
                           </div>
-
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 truncate">{lesson.title}</span>
-                              {lesson.isFreePreview && (
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                  무료체험
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                              {lesson.type === 'video' && (
-                                <span>{formatDuration(lesson.durationSeconds, lesson.durationStatus)} 영상</span>
-                              )}
-                              {(lesson.type === 'quiz' || lesson.type === 'exam') && (
-                                <span className="font-semibold text-indigo-600">
-                                  문제 {questions.length}문항 등록됨
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action buttons per lesson */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {/* If Quiz or Exam: Questions Builder button */}
-                          {(lesson.type === 'quiz' || lesson.type === 'exam') && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveLessonForQuestion(lesson);
-                                  setIsQuestionModalOpen(true);
-                                }}
-                                className="py-1 px-2.5 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-700 rounded-md font-semibold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>문제 출제 ({questions.length})</span>
-                              </button>
-
-                              {lesson.type === 'exam' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveLessonForExam(lesson);
-                                    setIsExamModalOpen(true);
-                                  }}
-                                  className="py-1 px-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md font-semibold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-                                  title="시험 합격점수 및 규칙 설정"
-                                >
-                                  <Settings className="w-3 h-3" />
-                                </button>
-                              )}
-                            </>
-                          )}
-
-                          {/* If Video: Edit Video button */}
-                          {lesson.type === 'video' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingLesson(lesson);
-                                setIsVideoModalOpen(true);
-                              }}
-                              className="py-1 px-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md font-semibold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-                            >
-                              <Edit2 className="w-3 h-3 text-slate-500" />
-                              <span>영상 수정</span>
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={lesIdx === 0}
-                            onClick={() => handleMoveLesson(lesson.id, section.id, 'up')}
-                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={lesIdx === secLessons.length - 1}
-                            onClick={() => handleMoveLesson(lesson.id, section.id, 'down')}
-                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLesson(lesson.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                            title="강의 삭제"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <p className="text-xs text-neutral-500">
+                            {lesson.type === 'video'
+                              ? `영상 · ${formatDuration(lesson.durationSeconds, lesson.durationStatus)}`
+                              : `${lesson.type === 'exam' ? '평가' : '퀴즈'} · 문제 ${questions.length}개`}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })
-                )}
 
-                {/* Add Lesson Actions inside section */}
-                <div className="pt-2 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleCreateVideoLesson(section.id)}
-                    className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Video className="w-3.5 h-3.5" />
-                    <span>+ 영상 강의 추가</span>
-                  </button>
+                      <div className="flex items-center gap-1 pl-10 sm:pl-0">
+                        {isAssessment && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveLessonForQuestion(lesson);
+                              setIsQuestionModalOpen(true);
+                            }}
+                            className="lms-btn lms-btn-secondary lms-btn-sm"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            문제 추가
+                          </button>
+                        )}
+                        {lesson.type === 'exam' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveLessonForExam(lesson);
+                              setIsExamModalOpen(true);
+                            }}
+                            className={iconBtn}
+                            title="합격 기준 설정"
+                            aria-label="합격 기준 설정"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </button>
+                        )}
+                        {lesson.type === 'video' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLesson(lesson);
+                              setIsVideoModalOpen(true);
+                            }}
+                            className="lms-btn lms-btn-secondary lms-btn-sm"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                            영상 편집
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={lesIdx === 0}
+                          onClick={() => handleMoveLesson(lesson.id, section.id, 'up')}
+                          className={iconBtn}
+                          aria-label="위로"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={lesIdx === secLessons.length - 1}
+                          onClick={() => handleMoveLesson(lesson.id, section.id, 'down')}
+                          className={iconBtn}
+                          aria-label="아래로"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLesson(lesson.id)}
+                          className="rounded-md p-1.5 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                          title="삭제"
+                          aria-label="항목 삭제"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
 
-                  <button
-                    type="button"
-                    onClick={() => handleCreateQuizLesson(section.id, 'quiz')}
-                    className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <FileQuestion className="w-3.5 h-3.5" />
-                    <span>+ 퀴즈 추가</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleCreateQuizLesson(section.id, 'exam')}
-                    className="py-1.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Award className="w-3.5 h-3.5" />
-                    <span>+ 최종 평가 시험 추가</span>
-                  </button>
-                </div>
+              <div className="flex flex-wrap gap-1 border-t border-neutral-100 px-2 py-2">
+                <button type="button" onClick={() => handleCreateVideoLesson(section.id)} className="lms-btn lms-btn-ghost lms-btn-sm">
+                  <Video className="h-4 w-4 text-neutral-500" />
+                  영상 추가
+                </button>
+                <button type="button" onClick={() => handleCreateQuizLesson(section.id, 'quiz')} className="lms-btn lms-btn-ghost lms-btn-sm">
+                  <FileQuestion className="h-4 w-4 text-neutral-500" />
+                  퀴즈 추가
+                </button>
+                <button type="button" onClick={() => handleCreateQuizLesson(section.id, 'exam')} className="lms-btn lms-btn-ghost lms-btn-sm">
+                  <Award className="h-4 w-4 text-neutral-500" />
+                  평가 추가
+                </button>
               </div>
             </div>
           );
@@ -578,46 +495,26 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({ course, on
       <Modal
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
-        title={deleteConfirm?.type === 'section' ? '섹션 삭제 확인' : '강의 항목 삭제 확인'}
+        title={deleteConfirm?.type === 'section' ? '섹션 삭제' : '항목 삭제'}
       >
         {deleteConfirm && (
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">
-                  {deleteConfirm.type === 'section'
-                    ? '해당 섹션과 포함된 모든 강의 및 문제를 영구 삭제하시겠습니까?'
-                    : '해당 강의 항목을 삭제하시겠습니까?'}
-                </p>
-                <p className="mt-1 text-rose-700 leading-relaxed">
-                  {deleteConfirm.type === 'section'
-                    ? '섹션에 속한 동영상 강의, 퀴즈, 시험 문항 및 수강생 진도 데이터가 함께 정리됩니다.'
-                    : '삭제된 레슨 및 영상/평가 문항 데이터는 복구할 수 없습니다.'}
-                </p>
-              </div>
+            <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-800">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+              <p className="leading-relaxed">
+                <strong className="font-semibold">'{deleteConfirm.title}'</strong>
+                {deleteConfirm.type === 'section'
+                  ? ' 섹션과 그 안의 영상, 퀴즈, 문제, 수강생 진도가 함께 삭제됩니다.'
+                  : ' 항목과 영상·문제 데이터가 삭제되며 복구할 수 없습니다.'}
+              </p>
             </div>
-
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-              <p className="text-slate-500 text-[11px]">삭제 대상:</p>
-              <p className="font-bold text-slate-900 mt-0.5">{deleteConfirm.title}</p>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-              >
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+              <button type="button" onClick={() => setDeleteConfirm(null)} className="lms-btn lms-btn-secondary">
                 취소
               </button>
-              <button
-                type="button"
-                onClick={handleExecuteDelete}
-                className="px-4 py-2 font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>삭제 실행</span>
+              <button type="button" onClick={handleExecuteDelete} className="lms-btn bg-rose-600 text-white hover:bg-rose-700">
+                <Trash2 className="h-4 w-4" />
+                삭제
               </button>
             </div>
           </div>

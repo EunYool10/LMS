@@ -4,11 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 import { CourseCover } from '../../components/common/CourseCover';
 import { EmptyState } from '../../components/common/EmptyState';
 import { AdminGlobalSearch } from '../../components/admin/AdminGlobalSearch';
-import { AdminActivityLog } from '../../components/admin/AdminActivityLog';
 import { AdminPageHeader, AdminPanel, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { Course, Enrollment, AuditLog, SystemAnnouncement } from '../../types';
 import { getRoleLabel } from '../../utils/rbac';
-import { Activity, ChevronRight, Database, Megaphone, PlusCircle } from 'lucide-react';
+import { Activity, ChevronRight, Megaphone, PlusCircle } from 'lucide-react';
 
 interface AdminDashboardPageProps {
   onNavigate: (view: string, param?: string) => void;
@@ -249,16 +248,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
         <AdminPanel
           title="최근 활동"
           bodyClassName=""
-          action={
-            <button
-              type="button"
-              onClick={() => onNavigate('admin-diagnostic')}
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-neutral-500 hover:text-neutral-900 cursor-pointer"
-            >
-              <Database className="h-3.5 w-3.5" />
-              DB 진단
-            </button>
-          }
         >
           {recentActivities.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-neutral-500">최근 활동이 없습니다.</p>
@@ -279,7 +268,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
         </AdminPanel>
       </div>
 
-      <AdminActivityLog limit={8} showFilters={true} onNavigate={onNavigate} />
     </div>
   );
 };

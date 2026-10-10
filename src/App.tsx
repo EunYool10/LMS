@@ -25,7 +25,6 @@ import { AdminCourseEditorPage } from './pages/admin/AdminCourseEditorPage';
 import { AdminQuestionsPage } from './pages/admin/AdminQuestionsPage';
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
 import { AdminCertificatesPage } from './pages/admin/AdminCertificatesPage';
-import { AdminDiagnosticPage } from './pages/admin/AdminDiagnosticPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAnnouncementsPage } from './pages/admin/AdminAnnouncementsPage';
@@ -109,7 +108,6 @@ const AppContent: React.FC = () => {
                   {currentView === 'admin-certificates' && (
                     <AdminCertificatesPage onNavigate={handleNavigate} initialQuery={viewParam} />
                   )}
-                  {currentView === 'admin-diagnostic' && <AdminDiagnosticPage onNavigate={handleNavigate} />}
                   {currentView === 'admin-users' && <AdminUsersPage />}
                   {currentView === 'admin-settings' && <AdminSettingsPage />}
                 </div>

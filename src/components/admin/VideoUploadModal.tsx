@@ -645,34 +645,34 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       <Modal
         isOpen={isOpen}
       onClose={onClose}
-      title={lesson ? '영상 강의 수정' : '영상 강의 업로드 및 등록'}
-      subtitle="실제 동영상 메타데이터 및 정확한 재생시간(Duration)을 관리합니다."
+      title={lesson ? '영상 편집' : '영상 추가'}
+      subtitle="파일을 올리거나 YouTube·영상 링크를 등록합니다."
       maxWidth="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Source Tab Toggle */}
-        <div className="flex border-b border-slate-200">
+        <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
           <button
             type="button"
             onClick={() => setTab('file')}
-            className={`flex-1 py-2.5 text-xs font-semibold border-b-2 text-center transition-colors cursor-pointer ${
+            className={`flex-1 rounded-md py-2 text-[13px] font-medium text-center transition-colors cursor-pointer ${
               tab === 'file'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-neutral-900 shadow-xs'
+                : 'text-neutral-500 hover:text-neutral-800'
             }`}
           >
-            내 컴퓨터에서 파일 업로드 (MP4 / MOV / WebM · 100MB 제한)
+            파일 업로드
           </button>
           <button
             type="button"
             onClick={() => setTab('url')}
-            className={`flex-1 py-2.5 text-xs font-semibold border-b-2 text-center transition-colors cursor-pointer ${
+            className={`flex-1 rounded-md py-2 text-[13px] font-medium text-center transition-colors cursor-pointer ${
               tab === 'url'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-neutral-900 shadow-xs'
+                : 'text-neutral-500 hover:text-neutral-800'
             }`}
           >
-            외부 스트리밍 / YouTube 링크
+            링크 (YouTube · URL)
           </button>
         </div>
 
@@ -1188,7 +1188,7 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
             disabled={isUploading || isCheckingDuration}
             className="py-2 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
           >
-            영상 강의 저장하기
+            저장
           </button>
         </div>
       </form>

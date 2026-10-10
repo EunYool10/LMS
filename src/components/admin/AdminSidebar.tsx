@@ -4,14 +4,12 @@ import { Avatar } from '../common/Avatar';
 import {
   LayoutDashboard,
   BookOpen,
-  PlusCircle,
   FileQuestion,
   Users,
   BarChart3,
   Award,
   Settings,
   ArrowLeft,
-  Database,
   Menu,
   X,
   Megaphone,
@@ -54,14 +52,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
       title: '콘텐츠',
       items: [
         { id: 'admin-courses', label: '강의 관리', icon: BookOpen },
-        { id: 'admin-courses-create', label: '새 강의 만들기', icon: PlusCircle },
         { id: 'admin-questions', label: '문제 · 퀴즈', icon: FileQuestion },
       ],
     },
     {
       title: '학습자',
       items: [
-        { id: 'admin-analytics', label: '학습 통계', icon: BarChart3 },
+        { id: 'admin-analytics', label: '학습 현황', icon: BarChart3 },
         { id: 'admin-certificates', label: '수료증 조회', icon: Award },
         { id: 'admin-users', label: '사용자 · 권한', icon: Users },
       ],
@@ -69,7 +66,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
     {
       title: '시스템',
       items: [
-        { id: 'admin-diagnostic', label: 'DB 진단', icon: Database },
         { id: 'admin-settings', label: '환경설정', icon: Settings, superOnly: true },
       ],
     },
@@ -80,7 +76,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
     setIsMobileOpen(false);
   };
 
-  const activeId = currentView === 'admin-courses-edit' ? 'admin-courses' : currentView;
+  const activeId = currentView === 'admin-courses-edit' || currentView === 'admin-courses-create' ? 'admin-courses' : currentView;
   const activeLabel = menuSections.flatMap((s) => s.items).find((i) => i.id === activeId)?.label || '관리자 콘솔';
 
   const sidebarContent = (

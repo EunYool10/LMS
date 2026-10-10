@@ -92,15 +92,15 @@ export const BaseModal: React.FC<BaseModalProps> = ({
     : 'items-center justify-center p-3 sm:p-5';
 
   const modalBoxClasses = asBottomSheetOnMobile
-    ? `relative z-10 w-full ${widthMap[maxWidth]} max-h-[88vh] sm:max-h-[90vh] flex flex-col bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/90 overflow-hidden animate-in fade-in slide-in-from-bottom-6 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 pb-[calc(8px+env(safe-area-inset-bottom,0px))] sm:pb-0 ${className}`
-    : `relative z-10 w-full ${widthMap[maxWidth]} max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${className}`;
+    ? `relative z-10 w-full ${widthMap[maxWidth]} max-h-[88vh] sm:max-h-[90vh] flex flex-col bg-white rounded-t-2xl sm:rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-6 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 pb-[calc(8px+env(safe-area-inset-bottom,0px))] sm:pb-0 ${className}`
+    : `relative z-10 w-full ${widthMap[maxWidth]} max-h-[90vh] flex flex-col bg-white rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${className}`;
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={typeof title === 'string' ? title : ariaLabel || '모달 대화상자'}
-      className={`fixed inset-0 z-[9999] flex select-none ${containerClasses}`}
+      className={`fixed inset-0 z-[9999] flex ${containerClasses}`}
       style={{
         position: 'fixed',
         top: 0,
@@ -113,7 +113,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({
     >
       {/* Dimmed Overlay Backdrop with backdrop-blur */}
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+        className="fixed inset-0 bg-neutral-950/45 transition-opacity animate-in fade-in duration-150"
         onClick={closeOnBackdropClick ? onClose : undefined}
         aria-hidden="true"
       />
@@ -126,15 +126,15 @@ export const BaseModal: React.FC<BaseModalProps> = ({
         {/* Mobile Bottom Sheet Pull Indicator */}
         {asBottomSheetOnMobile && (
           <div className="sm:hidden pt-2 pb-1 flex justify-center shrink-0">
-            <div className="w-10 h-1 rounded-full bg-slate-300" />
+            <div className="w-10 h-1 rounded-full bg-neutral-300" />
           </div>
         )}
 
         {/* Header - render if title, headerContent, or close button exists */}
         {(title || headerContent || showCloseButton) && (
           <div
-            className={`flex items-center justify-between px-5 sm:px-6 py-4 bg-slate-50/70 shrink-0 ${
-              headerBorder ? 'border-b border-slate-100' : ''
+            className={`flex items-center justify-between px-5 sm:px-6 py-4 bg-white shrink-0 ${
+              headerBorder ? 'border-b border-neutral-200' : ''
             }`}
           >
             {headerContent ? (
@@ -142,21 +142,21 @@ export const BaseModal: React.FC<BaseModalProps> = ({
             ) : (
               <div>
                 {title && (
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                  <h3 className="text-base font-semibold text-neutral-900">
                     {title}
                   </h3>
                 )}
-                {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+                {subtitle && <p className="mt-0.5 text-[13px] text-neutral-500">{subtitle}</p>}
               </div>
             )}
             {showCloseButton && (
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 transition-colors cursor-pointer shrink-0 ml-2"
+                className="ml-2 shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors cursor-pointer"
                 aria-label="닫기"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="h-5 w-5" />
               </button>
             )}
           </div>
@@ -173,7 +173,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({
 
         {/* Optional Footer */}
         {footerContent && (
-          <div className="border-t border-slate-100 px-5 sm:px-6 py-3.5 bg-slate-50/50 shrink-0">
+          <div className="shrink-0 border-t border-neutral-200 bg-white px-5 py-3.5 sm:px-6">
             {footerContent}
           </div>
         )}

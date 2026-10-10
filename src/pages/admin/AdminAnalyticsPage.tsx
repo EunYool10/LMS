@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { StudentAnalyticsTable } from '../../components/admin/StudentAnalyticsTable';
+import { CourseCompletionReport } from '../../components/admin/CourseCompletionReport';
 import { storage } from '../../services/storage';
 import { useToast } from '../../context/ToastContext';
-import { CertificateLookupModal } from '../../components/admin/CertificateLookupModal';
 import {
   Users,
   CheckCircle2,
@@ -18,8 +18,7 @@ import {
 
 export const AdminAnalyticsPage: React.FC = () => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'records' | 'statistics'>('records');
-  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'completion' | 'records' | 'statistics'>('completion');
   const analytics = storage.getPlatformAnalytics();
   const enrollments = storage.getEnrollments();
   const courses = storage.getCourses(true);
@@ -200,24 +199,13 @@ export const AdminAnalyticsPage: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">학습 분석 및 수강생 기록</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">학습 현황</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            실제 수강 데이터 기반의 학습 진도율, 이수 완료율 및 평가 시험 성적을 모니터링합니다.
+            과정별 이수율과 수강생 진도, 평가 결과를 확인합니다.
           </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            type="button"
-            id="btn-open-certificate-lookup"
-            onClick={() => setIsCertModalOpen(true)}
-            className="lms-btn lms-btn-secondary lms-btn-sm"
-            title="수료증 인증번호 진위 조회 및 발급 확인"
-          >
-            <Award className="w-4 h-4 text-neutral-500" />
-            <span>수료증 조회</span>
-          </button>
-
           <button
             type="button"
             id="btn-export-analytics-csv"
@@ -229,30 +217,27 @@ export const AdminAnalyticsPage: React.FC = () => {
             <span>CSV 내보내기</span>
           </button>
 
-          {/* Subtab Toggle */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setActiveTab('records')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'records'
-                  ? 'bg-white text-indigo-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              수강생 학습 기록
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('statistics')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                activeTab === 'statistics'
-                  ? 'bg-white text-indigo-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              학습 통계 분석
-            </button>
+          <div className="inline-flex rounded-lg bg-neutral-100 p-1" role="tablist">
+            {(
+              [
+                { id: 'completion', label: '과정별 이수' },
+                { id: 'records', label: '수강생 기록' },
+                { id: 'statistics', label: '통계' },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer ${
+                  activeTab === t.id ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -324,7 +309,9 @@ export const AdminAnalyticsPage: React.FC = () => {
       </div>
 
       {/* Main Tab Content */}
-      {activeTab === 'records' ? (
+      {activeTab === 'completion' ? (
+        <CourseCompletionReport />
+      ) : activeTab === 'records' ? (
         <StudentAnalyticsTable />
       ) : (
         <div className="space-y-6">
@@ -440,13 +427,6 @@ export const AdminAnalyticsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Certificate Lookup Modal */}
-      {isCertModalOpen && (
-        <CertificateLookupModal
-          isOpen={isCertModalOpen}
-          onClose={() => setIsCertModalOpen(false)}
-        />
-      )}
     </div>
   );
 };

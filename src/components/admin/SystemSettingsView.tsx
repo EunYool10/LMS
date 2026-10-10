@@ -155,32 +155,6 @@ export const SystemSettingsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Announcement Banner */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Bell className="w-3.5 h-3.5 text-indigo-600" />
-                <span>상단 글로벌 공지사항 문구</span>
-              </h4>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={settings.showAnnouncement !== false}
-                  onChange={(e) => setSettings({ ...settings, showAnnouncement: e.target.checked })}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>공지 노출 활성화</span>
-              </label>
-            </div>
-            <input
-              type="text"
-              value={settings.announcement || ''}
-              onChange={(e) => setSettings({ ...settings, announcement: e.target.value })}
-              placeholder="메인 페이지 상단에 노출될 이벤트나 공지를 입력하세요."
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
           {/* Policy Links (Notion & External) */}
           <div className="pt-4 border-t border-slate-100">
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">

@@ -1,360 +1,141 @@
-# TDSN LMS 모바일 전용 웹 기술 및 UI/UX 아키텍처 명세서
-> 문서 파일명: `LMS_MOBILE_ARCHITECTURE_KO.md`  
-> 대상 독자: 프론트엔드/풀스택 엔지니어, 신규 투입 개발자, 유지보수 담당자  
-> 작성 언어: 한국어 (KO)  
-> 최신 업데이트 기준: 2026년 9월
+# TDSNT LMS 화면 구조 · 디자인 시스템 가이드
+
+> 대상: 프론트엔드/풀스택 엔지니어, 신규 투입 개발자, 유지보수 담당자
+> 기준: 2026년 10월 전면 디자인 개편 이후
 
 ---
 
-## 1. 개요 및 핵심 개발 원칙
+## 1. 원칙
 
-본 문서는 **TDS 본사 사내 교육 플랫폼(TDSN LMS)**의 **모바일 웹 전용 UI/UX 계층 및 내부 동작 구조**를 체계적으로 설명하는 내부 기술 가이드입니다.
-
-### 1.1 핵심 아키텍처 원칙
-
-1. **공통 데이터 계층(Single Data Layer) 단일화**
-   - 모바일 전용 백엔드나 모바일 전용 Mock 데이터를 별도로 구축하지 않습니다.
-   - 인증(`AuthContext`), 권한 검증, 로컬/원격 스토리지(`storage.ts`), API 서비스(`authApi.ts`), 상태 관리, 비즈니스 계산 로직은 **PC 환경과 100% 동일한 시스템**을 공유합니다.
-2. **PC 화면의 단순 축소(Scale-down) 금지**
-   - CSS `transform: scale(...)`이나 1200px 와이드 레이아웃의 무분별한 `overflow-x: auto` 강제 스크롤 방식을 지양합니다.
-   - 모바일 환경의 터치 조작 특성, 뷰포트 너비(360px ~ 430px), 한 손 사용성, 동적 가상 키보드를 고려하여 **모바일 전용 뷰 계층을 독립적으로 분리 구현**합니다.
-3. **관심사 분리 (Controller-View 패턴)**
-   - 대시보드, 강의실, 관리자 페이지 등의 비즈니스 상태와 데이터 가공은 Controller 페이지(`DashboardPage.tsx` 등)에서 수행하고, 디바이스 감지(`useResponsive`)를 통해 `DesktopStudentDashboard` 또는 `MobileStudentDashboard`로 주입합니다.
+1. **데이터 계층은 하나입니다.** 인증(`AuthContext`), 권한(`utils/rbac.ts`), 저장소(`services/storage.ts`), API(`services/*Api.ts`)는 PC와 모바일이 같은 코드를 씁니다. 모바일 전용 백엔드나 목업 데이터는 만들지 않습니다.
+2. **화면마다 반응형 컴포넌트 하나만 둡니다.** PC용과 모바일용 컴포넌트를 따로 만들어 JS로 분기하지 않습니다(예전의 `DesktopStudentDashboard` / `MobileStudentDashboard`와 `useResponsive` 훅은 삭제했습니다). 레이아웃 차이는 Tailwind 반응형 클래스(`sm:`, `md:`, `lg:`)로 처리합니다.
+3. **색과 모양은 토큰으로만 바꿉니다.** 화면 코드에 hex 색을 직접 쓰지 않고 `src/index.css`의 `@theme` 토큰을 씁니다.
+4. **PC 화면을 축소하지 않습니다.** `transform: scale`이나 페이지 전체 가로 스크롤을 쓰지 않습니다. 넓은 표만 자체 영역 안에서 가로 스크롤합니다.
 
 ---
 
-## 2. 모바일 전체 시스템 구조
+## 2. 디자인 시스템
+
+### 2.1 토큰 (`src/index.css` → `@theme`)
+
+| 그룹 | 용도 | 비고 |
+|---|---|---|
+| `brand-50…950` | 주 색(버튼, 링크, 진행 막대, 선택 상태) | TDS 로고의 블루 |
+| `navy-50…950` | 제목, 진한 면, 이니셜 아바타 | TDS 로고의 네이비 |
+| `neutral-0…950` | 글자, 테두리, 배경 | 차가운 회색 |
+| `emerald` / `amber` / `rose` | 완료 · 주의 · 위험 상태 | Tailwind 기본값 사용 |
+
+- 옛 코드에 남아 있는 `indigo` · `blue` · `violet` 클래스는 `brand`로, `purple`은 `navy`로, `slate` · `gray`는 `neutral`로 **토큰 단계에서 다시 연결**되어 있습니다. 새 코드에는 `brand` / `navy` / `neutral`을 직접 쓰세요.
+- 모서리: `rounded-lg`(8px) 입력·버튼, `rounded-xl`(10px) 카드·패널, `rounded-2xl`(12px) 이하만 사용합니다.
+- 그림자는 거의 쓰지 않습니다. 카드는 `border border-neutral-200`으로 구분하고, 마우스를 올렸을 때만 `shadow-md`를 씁니다.
+- 글꼴: Pretendard(`--font-sans`). `index.html`에서 CDN으로 불러옵니다.
+
+### 2.2 공통 클래스 (`@layer components`)
+
+| 클래스 | 설명 |
+|---|---|
+| `.lms-container` | 본문 폭 `min(100% - 32px, 1200px)` |
+| `.lms-card`, `.lms-card-interactive` | 흰 배경 + 테두리 카드 |
+| `.lms-input` | 입력창/셀렉트(높이 40px). `textarea`는 `h-auto`를 함께 씁니다 |
+| `.lms-btn` + `-primary` / `-secondary` / `-ghost` / `-sm` | 버튼 |
+| `.lms-section-title`, `.lms-eyebrow` | 섹션 제목, 작은 머리 문구 |
+
+`@layer components` 안에 있으므로 Tailwind 유틸리티로 덮어쓸 수 있습니다(예: `lms-btn h-11`).
+
+### 2.3 공통 컴포넌트
+
+| 컴포넌트 | 위치 | 용도 |
+|---|---|---|
+| `BrandLogo`, `TDSNTWordmark` | `components/common/BrandLogo.tsx` | TDSNT 워드마크(SVG, `currentColor`) |
+| `Avatar` | `components/common/Avatar.tsx` | 원형 프로필 사진, 없으면 이니셜 |
+| `CourseCover` | `components/common/CourseCover.tsx` | 16:9 강의 표지. 썸네일이 없으면 카테고리 아이콘 표지 |
+| `CategoryIcon` | `components/common/CategoryIcon.tsx` | 카테고리별 아이콘 |
+| `CourseCard` | `components/student/CourseCard.tsx` | 강의 카드. 모바일(<640px)에서는 가로형 |
+| `BaseModal` / `Modal` | `components/common/` | 모든 모달. 모바일에서는 바텀시트 |
+| `AdminPageHeader`, `AdminStatStrip`, `AdminPanel` | `components/admin/AdminPageHeader.tsx` | 관리자 화면 머리말, 숫자 띠, 패널 |
+| `EmptyState` | `components/common/EmptyState.tsx` | 빈 목록 안내 |
+
+---
+
+## 3. 화면 구조
+
+### 3.1 라우팅
+`src/App.tsx`의 `currentView` 문자열로 화면을 바꿉니다(URL 라우터 없음). `handleNavigate(view, param)`로 이동합니다.
+
+### 3.2 전역 레이아웃
 
 ```text
-[ 모바일 브라우저 (iOS Safari, Android Chrome 등) ]
-                      │
-                      ▼
-┌────────────────────────────────────────────────────────┐
-│                   Mobile UI Layer                      │
-│                                                        │
-│  ├─ Global Container (App.tsx: min-h-screen-dvh)       │
-│  ├─ Mobile Header (Navbar.tsx: 로고, 알림 뱃지, 드로어)  │
-│  ├─ Bottom Navigation (MobileBottomNav.tsx: 44px+)     │
-│  ├─ Mobile Page & Layout Controller                    │
-│  │   └─ DashboardPage / HomePage / LearnPage / Admin   │
-│  └─ Mobile Components                                  │
-│      ├─ MobileStudentDashboard (이어서 학습 / 2x2 지표) │
-│      ├─ Mobile Card & List Views (테이블 변환 뷰)        │
-│      ├─ BaseModal (모바일 바텀시트 전환)               │
-│      └─ EmptyState (모바일 친화적 안내 컴포넌트)         │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│              Common Shared Service Layer               │
-│                                                        │
-│  ├─ Auth Service & Context (authApi.ts, AuthContext)   │
-│  ├─ Storage Service (storage.ts: 진도, 퀴즈, 수료증)   │
-│  ├─ Toast Notification (ToastContext)                  │
-│  └─ Viewport Detection (useResponsive.ts)              │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│               동일한 백엔드 & 데이터베이스                │
-│                                                        │
-│  ├─ Production Backend API                             │
-│  ├─ Firebase Firestore / Cloud SQL                     │
-│  └─ Client Persisted Store (tdsn_lms_* LocalStorage)   │
-└────────────────────────────────────────────────────────┘
+┌─ Navbar (64px, sticky) ── 학습 화면(learn)에서는 숨김 ─────────┐
+├─ AnnouncementBanner (홈 전용, 상단바 바로 아래 전체 폭 띠) ────┤
+│  페이지 본문                                                    │
+├─ Footer (학습 화면·관리자 화면에서는 숨김) ─────────────────────┤
+└─ MobileBottomNav (<768px, 학습 화면에서는 숨김) ───────────────┘
 ```
 
----
+### 3.3 수강생 화면
 
-## 3. PC와 모바일의 동일 데이터 연결 모델
+| view | 파일 | 구성 |
+|---|---|---|
+| `home` | `pages/HomePage.tsx` | 소개 띠(인사 + 검색 + 나의 학습 요약) → 이어서 학습 → 필수 교육 → 카테고리 탭 + 강의 목록 |
+| `course-detail` | `pages/CourseDetailPage.tsx` | 머리 띠(경로·제목·메타·강사) + 본문(학습 목표·소개·커리큘럼·수강평) + 고정 수강 카드 |
+| `learn` | `pages/LearnPage.tsx` | 강의 전용 상단바, 플레이어, 진도 막대, 탭(개요·메모·질문), 고정 커리큘럼 |
+| `dashboard` | `pages/DashboardPage.tsx` → `components/student/StudentDashboard.tsx` | 숫자 띠 + 탭 목록(수강 중·수료·관심·메모·평가) + 이번 주 학습 |
+| `account-settings` | `components/profile/AccountSettings.tsx` | 왼쪽 메뉴(기본 정보·보안·학습 현황) + 내용 |
+| `user-profile` | `pages/UserProfilePage.tsx` | 프로필 머리 + 수강 과정 |
 
-모바일 UI와 PC UI는 화면의 표현 형태(View Representation)만 다를 뿐, 동일한 비즈니스 로직과 API를 호출합니다.
+업적·배지·프로필 테두리 기능은 2026년 10월에 화면에서 제거했습니다(저장소 함수는 남아 있음).
 
-```text
-[ PC 환경 ]                               [ 모바일 환경 ]
-PC UI (DesktopStudentDashboard)          Mobile UI (MobileStudentDashboard)
-      │                                                │
-      └──────────────────────┬─────────────────────────┘
-                             ▼
-              [ 공통 Controller: DashboardPage.tsx ]
-                             │
-                             ▼
-              [ 공통 Service: storage.ts & authApi.ts ]
-                             │
-                             ▼
-              [ 단일 데이터베이스 & 영속 저장소 ]
-         (Firebase Firestore DB / tdsn_lms_v1_store)
-```
+### 3.4 관리자 화면
 
-- **절대 원칙**: 모바일 전용 버그를 수정하기 위해 모바일 컴포넌트 내부에 별도의 가짜 데이터(`dummy`, `mock`)를 하드코딩하거나, PC와 분리된 API를 생성해서는 안 됩니다.
+왼쪽 사이드바(`components/admin/AdminSidebar.tsx`, 모바일에서는 서랍) + 본문(최대 1280px).
 
----
+| 메뉴 | view | 주요 기능 |
+|---|---|---|
+| 대시보드 | `admin-dashboard` | 통합 검색, 숫자 띠, 홈 공지 상태, 최근 강의, 최근 활동 |
+| 공지사항 | `admin-announcements` | 전사 공지(홈 상단 띠) · 강의별 공지 |
+| 강의 관리 | `admin-courses` | 목록, 일괄 삭제, **수강 배정**, 편집기(`admin-courses-create` / `admin-courses-edit`) |
+| 문제 · 퀴즈 | `admin-questions` | 강의별 문제 은행 |
+| 학습 현황 | `admin-analytics` | **과정별 이수**(미이수자, 수강 배정, 독려 메일, CSV) · 수강생 기록 · 통계 |
+| 수료증 조회 | `admin-certificates` | 인증번호 진위 검증, 발급 대장 |
+| 사용자 · 권한 | `admin-users` | 사용자 목록, 권한, 감사 로그 |
+| 환경설정 | `admin-settings` | 정책 링크, 가입/점검 모드, 소셜 로그인 키(서비스 총괄 전용) |
 
-## 4. 뷰포트 감지 시스템 (`useResponsive.ts`)
-
-모바일 화면 분기를 위해 표준화된 React Hook `src/hooks/useResponsive.ts`를 사용합니다.
-
-### 4.1 규격 기준
-
-| 디바이스 구분 | 뷰포트 너비 조건 | 플래그 변수 | 사용 용도 |
-| :--- | :--- | :--- | :--- |
-| **Mobile** | `< 768px` | `isMobile` | 모바일 바텀 네비게이션, 모바일 대시보드, 바텀시트 모달, 카드 뷰 |
-| **Tablet** | `768px ~ 1023px` | `isTablet` | 2열 카드 그리드, 축소형 사이드바 |
-| **Desktop** | `≥ 1024px` | `isDesktop` | 와이드 멀티 컬럼, 고밀도 데이터 테이블, 대형 웰컴 배너 |
-
-### 4.2 내부 구현 특성
-- `50ms` 디바운스(Debounce)를 적용하여 화면 회전 및 브라우저 리사이즈 시 과도한 재계산을 방지합니다.
-- `ontouchstart` 및 `navigator.maxTouchPoints`를 검사하여 `isTouch` 속성을 제공합니다.
-- SSR 환경에서도 에러가 발생하지 않도록 초기 윈도우 객체 존재 유무를 방어적으로 확인합니다.
+**강의 편집기**(`pages/admin/AdminCourseEditorPage.tsx`)는 4단계입니다: 기본 정보 → 커리큘럼(`CurriculumManager`: 섹션·영상·퀴즈·평가) → 수강 설정(완료 기준·학습 목표·태그·강의 공지) → 검토·게시.
 
 ---
 
-## 5. 모바일 글로벌 레이아웃 및 네비게이션
+## 4. 반응형 규칙
 
-### 5.1 최상위 뷰포트 제약 (`App.tsx`, `index.css`)
-- **100dvh 지원**: 모바일 Safari 등에서 상하단 브라우저 주소창 및 툴바가 접히고 펴질 때 발생하는 높이 왜곡을 방지하기 위해 `.min-h-screen-dvh` 및 `min-h-[100dvh]`를 전역 적용했습니다.
-- **안전 영역 인셋(Safe Area Insets)**:
-  - `.pb-safe-nav`: `padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));`
-  - 하단 고정 내비게이션 바로 인해 콘텐츠의 마지막 요소가 가려지지 않도록 메인 레이아웃에 기본 패딩을 부여합니다.
+| 폭 | 기준 | 적용 |
+|---|---|---|
+| `< 640px` | 기본 | 강의 카드 가로형, 표 → 카드 목록, 버튼 줄바꿈 허용 |
+| `≥ 640px` (`sm`) | 태블릿 세로 | 카드 그리드 2열, 표 표시 |
+| `< 768px` | `md` 미만 | 하단 탭 표시, 상단바 메뉴는 햄버거, 관리자 사이드바는 서랍 |
+| `≥ 1024px` (`lg`) | PC | 2단 레이아웃(본문 + 고정 사이드 카드/메뉴) |
 
-### 5.2 모바일 헤더 (`src/components/common/Navbar.tsx`)
-- 높이: `h-14` (56px) 컴팩트 사이즈
-- 좌측: TDS 사내 공식 `BrandLogo`
-- 우측: 실시간 알림 뱃지 드롭다운(`NotificationDropdown`), 유저 아바타 또는 햄버거 메뉴 토글 버튼
-- PC의 가로형 세그먼트 메뉴바(`강의 목록`, `내 학습방`, `관리자 콘솔`)는 모바일 헤더에서 숨김 처리(`hidden md:flex`)되고 모바일 하단 네비게이션으로 이관됩니다.
-
-### 5.3 모바일 하단 네비게이션 (`src/components/common/MobileBottomNav.tsx`)
-
-모바일 화면 하단에 고정(`fixed bottom-0 left-0 right-0 z-40`)되어 엄지손가락으로 손쉽게 주요 화면을 이동할 수 있도록 설계되었습니다.
-
-```text
-┌────────────────────────────────────────────────────────┐
-│                      Mobile Body                       │
-├────────────────────────────────────────────────────────┤
-│   [ 홈 ]       [ 탐색 ]       [ 내 학습 ]     [ 관리자 ]  │
-│    (Home)      (Explore)     (Dashboard)      (Admin)   │
-└────────────────────────────────────────────────────────┘
-  * iOS Home Indicator Safe Area 자동 패딩 (env(safe-area-inset-bottom))
-```
-
-- **메뉴 항목**:
-  1. **홈 (Home)**: 메인 화면 및 추천 강의로 이동
-  2. **탐색 (Explore)**: 전체 강의 탐색 및 검색 영역으로 즉시 이동
-  3. **내 학습 (My Learning)**: 수강생 대시보드로 이동 (비로그인 시 로그인 모달 호출)
-  4. **관리자 (Admin) / 알림**: 
-     - 관리자 권한(`ADMIN`, `SUPER_ADMIN`) 보유 시 관리자 대시보드 바로가기 제공
-     - 일반 수강생(`USER`)의 경우 알림 바로가기 제공
-- **강의실 예외 처리**:
-  - 몰입감 있는 수강 환경을 제공하기 위해 동영상 강의 플레이어(`LearnPage.tsx`) 화면에서는 하단 네비게이션 바가 자동으로 숨김 처리됩니다 (`!isLearnRoute`).
-- **터치 영역**: 각 탭은 최소 `56px × 44px` 이상의 안전 터치 영역을 확보하고 활성 탭에 하이라이트 인디케이터를 적용합니다.
+- 표는 `whitespace-nowrap` + 감싸는 `overflow-x-auto`를 씁니다. 모바일에서는 같은 데이터를 카드 목록으로 따로 그립니다(예: 관리자 대시보드 최근 강의, 강의 관리).
+- 모달은 `BaseModal`을 쓰면 640px 미만에서 자동으로 바텀시트가 됩니다.
+- 하단 탭이 있는 화면의 마지막 요소는 `pb-safe-nav`(80px + safe area)로 가려지지 않게 합니다.
+- 터치 대상은 최소 40px(`h-10`) 이상으로 둡니다.
 
 ---
 
-## 6. 모바일 대시보드 (Mobile Dashboard) 아키텍처
+## 5. 데이터 흐름
 
-`src/pages/DashboardPage.tsx`는 데이터를 일괄 가공하고, 모바일 화면에서는 `MobileStudentDashboard.tsx`를 렌더링합니다.
-
-### 6.1 정보 우선순위 구조 (Information Hierarchy)
-
-PC 대시보드의 복잡한 12열 그리드와 거대한 배너를 단순 축소하지 않고, **모바일 사용자가 앱을 켰을 때 가장 먼저 수행해야 하는 액션**을 최상단에 배치합니다.
-
-```text
-1. [ 사용자 프로필 미니 카드 ]
-   - 이름, 권한 뱃지, 업적 칭호, 설정 및 업적 도감 아이콘 (컴팩트 헤더)
-   ↓
-2. [ 최우선 섹션: "오늘 이어서 학습하기" (오늘의 수업) ]
-   - 최근 수강 중인 강의 썸네일 + 강의명 + 최근 학습 차시명
-   - 현재 진도율 프로그레스 바 (%)
-   - 1-터치 전체 너비 즉시 학습하기 버튼 (최소 높이 46px)
-   ↓
-3. [ 핵심 지표 2×2 미니 그리드: "오늘의 학습 현황" ]
-   - [전체 평균 진도율 (%)]  [수강 중인 강의 (N개)]
-   - [수료 완료 강의 (N개)]  [연속 출석 스트릭 (🔥 N일)]
-   ↓
-4. [ 모바일 세그먼트 가로 탭바 ]
-   - [수강 중] [수료증] [찜한 강의] [노트/북마크] [퀴즈 내역]
-   ↓
-5. [ 탭별 전용 모바일 카드 리스트 ]
-   - 다열 그리드가 아닌 엄지손가락 스크롤에 최적화된 1열 카드 리스트
-```
-
-### 6.2 모바일 탭별 뷰 컴포넌트 특성
-- **수강 중 탭**: 각 강의를 개별 카드로 렌더링하며, 강의 정보 보기 버튼과 즉시 이어보기 버튼을 5:5 비율로 터치하기 쉽게 제공합니다.
-- **수료증 탭**: 완강된 강의에 대해 엠버/골드 테두리의 수료증 카드를 표시하고, `수료증 미리보기`와 `강의 복습` 버튼을 배치합니다.
-- **노트 및 북마크 탭**: 영상 타임스탬프(`04:25` 등)를 탭하면 강의실의 해당 시간대로 즉시 점프할 수 있으며, 1-터치 삭제가 가능합니다.
-- **퀴즈 응시 내역 탭**: 좁은 테이블 대신 응시 일시, 취득 점수, 합격/불합격 뱃지가 포함된 미니 카드로 표시합니다.
+1. 화면은 `storage`(localStorage 캐시)에서 동기적으로 읽습니다.
+2. 쓰기는 `storage`가 localStorage에 저장하고 `firestoreService`로 Firestore에 비동기 반영합니다.
+3. 앱 시작 시 `storage.syncFromFirestore()`가 사용자 · 강의 · 섹션 · 레슨 · 공지 · 설정을 내려받습니다.
+4. 같은 동기화에서 **수강 등록(enrollments)과 레슨 진도(progress)** 도 내려받습니다. 관리자는 전체, 수강생은 본인 기록만 받습니다. 그래서 관리자가 배정한 강의가 직원 기기에 나타나고, 학습 현황이 실제 데이터로 계산됩니다(`storage.mergeRemoteLearningData`).
+5. 앱 내 알림(`addNotification`)은 아직 해당 브라우저에만 저장됩니다. 직원에게 이수를 독려할 때는 학습 현황의 **독려 메일**(숨은 참조로 메일 앱을 엶)을 씁니다.
 
 ---
 
-## 7. 테이블(Table)의 모바일 카드/리스트(Card/List) 변환 패턴
+## 6. 수정 체크리스트
 
-PC 환경에서는 고밀도 정렬이 가능한 8~10열 와이드 데이터 테이블을 사용하지만, 모바일 화면에서는 수평 스크롤로 인한 가독성 저하를 방지하기 위해 **모바일 전용 카드 리스트(Card List)**로 100% 변환합니다.
-
-### 7.1 적용 컴포넌트 현황
-
-| 대상 파일 | PC 레이아웃 (`hidden md:block`) | 모바일 레이아웃 (`block md:hidden`) |
-| :--- | :--- | :--- |
-| **`StudentAnalyticsTable.tsx`** | 9열 수강생 진도율 테이블 | 아바타 + 진도율 바 + 1-터치 인증번호 복사 + 수료증 확인 카드 리스트 |
-| **`AdminCoursesPage.tsx`** | 7열 강의 관리 테이블 | 썸네일 + 전체선택 헤더 + 공개/비공개 토글 칩 + 모바일 액션 카드 리스트 |
-| **`UserManager.tsx`** | 8열 계정 관리 테이블 | 사용자 프로필 + 권한 뱃지 + 가입일 + 권한 변경/암호 재설정 바텀시트 |
-| **`AdminQuestionsPage.tsx`** | 2열 문항 테이블 | 문항 카드 + 선지 미리보기 + 40px 확장 터치 액션 버튼 |
-
-### 7.2 변환 예시 (`StudentAnalyticsTable.tsx`)
-
-**PC 데이터 테이블 형태 (9개 컬럼):**
-```text
-| 수강생 | 수강 강의 | 수료증 인증번호 | 진도율 | 완료 차시 | 최근 위치 | 신청일 | 상태 | 수료증 |
-```
-
-**모바일 카드 변환 형태:**
-```text
-┌────────────────────────────────────────────────────────┐
-│ [아바타] 홍길동 (hong@tds.com)               [이수 완료] │
-│ 정보통신기술 실무 입문 (2026 개정판)                     │
-│ ┌────────────────────────────────────────────────────┐ │
-│ │ 진도율 (12/12강)                             100%  │ │
-│ │ [████████████████████████████████████████████████] │ │
-│ └────────────────────────────────────────────────────┘ │
-│ 최근 학습: 제12강 네트워크 보안 최종 점검                  │
-│ 신청일: 2026. 09. 15                                   │
-│ ────────────────────────────────────────────────────── │
-│ [ CERT-2026-A9F1 📋 ]                 [ 수료증 보기 👁 ]│
-└────────────────────────────────────────────────────────┘
-```
-
-- **동일 데이터 보장**: 카드가 표시하는 수강생 ID, 진도율, 인증번호, 날짜는 PC 테이블과 동일한 `enrichedEnrollments` 배열 객체에서 가져옵니다.
-
----
-
-## 8. 모바일 모달 및 바텀시트 시스템 (`BaseModal.tsx`)
-
-모바일 브라우저의 특성상 화면 중앙에 뜨는 데스크톱 모달은 가상 키보드가 올라오거나 상하단 툴바로 인해 닫기 버튼이 잘리는 문제가 빈번합니다. TDSN LMS는 `BaseModal.tsx`를 통해 반응형 모달 전환을 기본 지원합니다.
-
-### 8.1 뷰포트별 렌더링 방식
-
-```text
-[ Desktop (≥ 768px) ]                    [ Mobile (< 768px) ]
-┌─────────────────────────┐             ┌─────────────────────────┐
-│        Dim Overlay      │             │       Dim Overlay       │
-│   ┌─────────────────┐   │             │                         │
-│   │                 │   │             │                         │
-│   │   Center Box    │   │             │                         │
-│   │  (rounded-2xl)  │   │             │ ┌─────────────────────┐ │
-│   │                 │   │             │ │    ── Drag Handle ── │ │
-│   └─────────────────┘   │             │ │     Bottom Sheet    │ │
-│                         │             │ │    (rounded-t-3xl)  │ │
-└─────────────────────────┘             └─┴─────────────────────┴─┘
-                                          * pb-[calc(8px+safe-area)]
-```
-
-### 8.2 모바일 바텀시트 사양
-1. **슬라이드 업 애니메이션**: 모바일 진입 시 `slide-in-from-bottom-6 duration-200` 효과로 부드럽게 하단에서 올라옵니다.
-2. **드래그 핸들 바**: 상단 중앙에 시각적 드래그 바(`w-10 h-1 bg-slate-300 rounded-full`)를 배치하여 모바일 제스처 감성을 제공합니다.
-3. **안전 영역 패딩**: 하단에 `pb-[calc(8px+env(safe-area-inset-bottom,0px))]`를 자동 적용하여 닫기/확인 버튼이 홈 바에 눌리지 않도록 보호합니다.
-4. **포털(Portal) 렌더링**: `createPortal(..., document.body)`를 사용하여 부모 컨테이너의 `overflow-hidden` 제약으로 인한 모달 잘림 현상을 원천 방지합니다.
-
----
-
-## 9. 모바일 검색 및 필터 인터랙션
-
-### 9.1 모바일 메인 검색창 (`HomePage.tsx`)
-- **너비 자동 100%**: 부모 컨테이너(`lms-container`) 내에서 가로 스크롤을 유발하지 않도록 `w-full`로 유연하게 늘어납니다.
-- **플레이스홀더 최적화**: 좁은 화면에서 글자가 잘리지 않도록 모바일에서는 `"강의나 키워드 검색"` 등 간결한 문구를 노출합니다.
-- **300ms 디바운스**: 모바일 가상 키보드 타이핑 시 불필요한 매 글자 검색 렌더링을 차단합니다.
-- **최근 검색어 레이어**: 검색창 아래에 `absolute` 드롭다운으로 띄우며, 검색창 포커스 시에만 열리고 바깥 터치 시 자동으로 닫힙니다.
-
-### 9.2 카테고리 필터
-- 모바일에서 텍스트 기반 드롭다운 대신 **터치 친화적인 가로 스크롤 필 탭(Pills Bar)**을 제공하여 한 번의 터치로 직무 분야(네트워크, 보안, 클라우드, 프로그래밍 등)를 즉시 필터링합니다.
-
----
-
-## 10. 터치 UX 및 폼 가이드라인
-
-모바일 웹 인터페이스를 수정하거나 추가할 때는 다음 터치 UX 표준을 엄격히 준수해야 합니다.
-
-1. **최소 터치 타깃 (Touch Target)**:
-   - 모든 대화형 버튼, 링크, 아이콘의 터치 가능 영역은 최소 **44px × 44px** 이상이어야 합니다.
-   - 작은 아이콘 버튼(수정, 삭제 등)의 경우 아이콘 자체는 `16px`이더라도 패딩을 부여하여 최소 `min-w-[40px] min-h-[40px]`를 확보합니다.
-2. **입력 폼과 가상 키보드 대응**:
-   - `input`, `select`, `textarea`의 기본 글자 크기는 모바일 Safari의 자동 줌인 현상을 방지하기 위해 최소 16px(또는 14px 이상의 적절한 line-height)를 유지합니다.
-   - 키보드가 올라올 때 하단 버튼이 묻히지 않도록 스크롤 영역(`overflow-y-auto`)을 지정합니다.
-3. **Hover 의존성 제거**:
-   - 마우스 커서의 `:hover`에 의존하여 나타나는 툴팁이나 액션 버튼을 지양합니다.
-   - 모바일에서는 항시 화면에 노출하거나 탭(Tap) 이벤트로 토글되도록 처리합니다.
-   - 터치 피드백을 위해 `:active` 상태에 `active:scale-95` 또는 `active:bg-slate-100`을 적용합니다.
-
----
-
-## 11. 모바일 데이터 흐름 (Data Flow Lifecycle)
-
-수강생이 모바일 화면에서 강의를 이어보거나 수강 완료하는 전형적인 데이터 사이클은 다음과 같습니다.
-
-```text
-1. [ 사용자 터치 ]
-   - 사용자가 모바일 대시보드의 [학습 계속하기] 버튼 탭
-   ↓
-2. [ Mobile Component 이벤트 핸들러 ]
-   - MobileStudentDashboard.tsx -> handleContinue(courseId, lessonId) 호출
-   ↓
-3. [ Controller 네비게이션 트리거 ]
-   - DashboardPage.tsx -> onNavigate('learn', `${courseId}/${lessonId}`) 실행
-   ↓
-4. [ 강의실 뷰 로드 & 진도 업데이트 ]
-   - LearnPage.tsx 마운트
-   - storage.saveProgress({ userId, courseId, lessonId, watchedSeconds, isCompleted: true })
-   ↓
-5. [ 스토리지 영속화 ]
-   - storage.ts -> LocalStorage / Firestore DB에 즉시 동기화
-   ↓
-6. [ 업적 & 통계 백그라운드 평가 ]
-   - storage.evaluateBadges(userId) -> 실시간 뱃지 획득 Toast 알림 발행
-   ↓
-7. [ State 갱신 및 모바일 UI 리렌더링 ]
-   - 학습률 프로그레스 바가 실시간으로 100%로 갱신되며 수료증 자동 발급
-```
-
-모바일 컴포넌트는 오직 이벤트를 상위로 전달하는 프레젠테이션 역할만 수행하며, 핵심 로직은 공통 Service와 Controller가 전담합니다.
-
----
-
-## 12. 상태(State) 처리 가이드
-
-모바일 환경에서는 네트워크 지연이나 불안정한 연결이 발생하기 쉬우므로, 모든 화면에 명확한 상태 처리가 적용되어 있어야 합니다.
-
-| 상태 구분 | 구현 방식 및 컴포넌트 | 모바일 UX 요구사항 |
-| :--- | :--- | :--- |
-| **Loading** | 스켈레톤 UI 또는 미니 스피너 | 화면 전체를 블로킹하지 않고 콘텐츠 영역 내에서 부드러운 펄스 애니메이션 표시 |
-| **Empty** | `src/components/common/EmptyState.tsx` | 중앙 아이콘, 제목, 부가 설명 및 즉시 다른 액션(강의 둘러보기 등)을 유도하는 44px 버튼 제공 |
-| **Error** | `ErrorBoundary.tsx` | 화면 충돌 시 홈으로 복귀할 수 있는 리셋 버튼 제공 |
-| **Unauthorized** | `AuthModal.tsx` 바텀시트 | 비로그인 상태에서 [내 학습] 진입 시 하단에서 슬라이드 업되는 로그인 모달 노출 |
-| **Forbidden** | `App.tsx` 관리자 접근 제한 블록 | 수강생 권한으로 관리자 URL 진입 시 명확한 사유 안내 및 계정 변경 버튼 제공 |
-
----
-
-## 13. 모바일 성능 최적화 수칙
-
-1. **이미지 최적화**:
-   - `CourseThumbnail.tsx`를 사용하여 외부 이미지 로딩 실패 시 사내 기본 플레이스홀더를 즉시 표시하여 레이아웃 흔들림(CLS)을 차단합니다.
-2. **동영상 반응형 처리**:
-   - `LearnPage.tsx` 내 비디오 플레이어는 16:9 반응형 고정 종횡비(`aspect-video`)를 유지하여 화면 밖으로 넘치지 않도록 방어합니다.
-3. **DOM 요소 경량화**:
-   - 모바일에서는 긴 테이블을 한 번에 렌더링하지 않고, 카드 리스트 형태로 분할 렌더링합니다.
-
----
-
-## 14. 모바일 코드 수정 및 유지보수 규칙
-
-새로운 기능(과제, 출석체크, 시험 등)을 추가하거나 모바일 UI를 유지보수할 때 개발팀은 다음 체크리스트를 준수해야 합니다.
-
-### 개발 체크리스트
-- [ ] **PC 로직 복제 금지**: 모바일 전용 컴포넌트를 만들 때 `storage.ts`의 조회/저장 함수를 변형하지 않고 그대로 재사용했는가?
-- [ ] **수평 스크롤 방지**: 모바일 360px 너비 기준에서 가로 스크롤바가 생기지 않는가?
-- [ ] **터치 타깃 준수**: 모든 터치 가능한 요소가 최소 44px 이상의 높이를 가지는가?
-- [ ] **Safe Area 확인**: 최하단 요소가 iOS 하단 바나 `MobileBottomNav`에 가려지지 않는가 (`pb-safe-nav` 적용 여부)?
-- [ ] **바텀시트 확인**: 새로 추가한 팝업이 모바일에서 화면 밖으로 넘치지 않고 `BaseModal` 바텀시트 형식으로 올바르게 동작하는가?
-
----
-
-## 15. 결론
-
-TDSN LMS의 모바일 웹 아키텍처는 **"동일한 비즈니스 로직, 최적화된 모바일 인터페이스"**라는 확고한 원칙 위에 구축되어 있습니다. 본 문서에 기술된 컴포넌트 구조, 터치 UX 표준, 그리고 뷰포트 분리 패턴을 준수함으로써, 데스크톱과 모바일 양쪽 환경 모두에서 최고 수준의 안정성과 사용자 만족도를 제공합니다.
+- [ ] 새 색은 `brand` / `navy` / `neutral` / 상태색만 썼는가? hex 직접 입력은 없는가?
+- [ ] 버튼·입력은 `lms-btn` / `lms-input`을 썼는가?
+- [ ] 390px 폭에서 가로 스크롤이 생기지 않는가?
+- [ ] 표는 모바일 카드 목록이 있거나, 표 영역만 가로 스크롤되는가?
+- [ ] 새 모달은 `BaseModal`을 쓰는가?
+- [ ] 하단 탭에 가려지는 요소는 없는가(`pb-safe-nav`)?
+- [ ] 관리자 화면은 `AdminPageHeader`로 시작하는가?

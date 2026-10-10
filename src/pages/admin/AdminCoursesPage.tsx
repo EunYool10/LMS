@@ -3,6 +3,7 @@ import { storage } from '../../services/storage';
 import { Course } from '../../types';
 import { Badge } from '../../components/common/Badge';
 import { CourseCover } from '../../components/common/CourseCover';
+import { AssignCourseModal } from '../../components/admin/AssignCourseModal';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +22,7 @@ import {
   Layers,
   AlertTriangle,
   CheckCircle2,
+  UserPlus,
 } from 'lucide-react';
 
 import { LEGACY_CATEGORY_MAP } from '../../data/categoriesData';
@@ -32,6 +34,7 @@ interface AdminCoursesPageProps {
 export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }) => {
   const { user: currentUser } = useAuth();
   const { showToast } = useToast();
+  const [assignTarget, setAssignTarget] = useState<Course | null>(null);
   const [courses, setCourses] = useState<Course[]>(() => storage.getCourses(true));
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -125,9 +128,9 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">전체 강의 목록 관리</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">강의 관리</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            등록된 강의의 커리큘럼 편집, 영상 업로드, 퀴즈 출제 및 공개 상태를 관리합니다.
+            강의를 만들고 커리큘럼을 편집하거나 직원에게 수강을 배정합니다.
           </p>
         </div>
 
@@ -137,7 +140,7 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
           className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>신규 강의 개설하기</span>
+          <span>새 강의</span>
         </button>
       </div>
 
@@ -332,6 +335,10 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
 
                   {/* Action Buttons */}
                   <div className="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setAssignTarget(course)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                      <UserPlus className="w-3.5 h-3.5" />
+                      배정
+                    </button>
                     <button
                       type="button"
                       onClick={() => onNavigate('admin-courses-edit', course.id)}
@@ -462,6 +469,15 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setAssignTarget(course)}
+                            className="py-1 px-2.5 bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-semibold rounded-md text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                            title="직원에게 수강 배정"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>배정</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => onNavigate('admin-courses-edit', course.id)}
@@ -606,6 +622,7 @@ export const AdminCoursesPage: React.FC<AdminCoursesPageProps> = ({ onNavigate }
           </div>
         )}
       </Modal>
+      <AssignCourseModal course={assignTarget} isOpen={!!assignTarget} onClose={() => setAssignTarget(null)} onAssigned={() => reload()} />
     </div>
   );
 };

@@ -336,7 +336,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             type="submit"
             className="py-2 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
           >
-            문제 저장하기
+            저장
           </button>
         </div>
       </form>

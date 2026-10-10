@@ -403,6 +403,36 @@ export const firestoreService = {
   // ====================================================
 
   /**
+   * Fetch enrollment records (all users when userId is omitted — admin reporting).
+   */
+  async getEnrollmentRecords(userId?: string): Promise<Array<{ userId: string; courseId: string; enrolledAt?: string }>> {
+    try {
+      const ref = userId ? query(collection(db, 'enrollments'), where('userId', '==', userId)) : collection(db, 'enrollments');
+      const snap = await getDocs(ref);
+      return snap.docs
+        .map((d) => d.data() as { userId: string; courseId: string; enrolledAt?: string })
+        .filter((e) => e && e.userId && e.courseId);
+    } catch (err) {
+      console.warn('[Firestore] Failed to get enrollment records:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Fetch lesson progress records (all users when userId is omitted — admin reporting).
+   */
+  async getProgressRecords(userId?: string): Promise<LessonProgress[]> {
+    try {
+      const ref = userId ? query(collection(db, 'progress'), where('userId', '==', userId)) : collection(db, 'progress');
+      const snap = await getDocs(ref);
+      return snap.docs.map((d) => d.data() as LessonProgress).filter((p) => p && p.userId && p.lessonId);
+    } catch (err) {
+      console.warn('[Firestore] Failed to get progress records:', err);
+      return [];
+    }
+  },
+
+  /**
    * Save course enrollment in Firestore
    */
   async saveEnrollment(userId: string, courseId: string): Promise<boolean> {

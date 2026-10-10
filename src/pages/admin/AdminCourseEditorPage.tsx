@@ -4,51 +4,105 @@ import { storage } from '../../services/storage';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { CurriculumManager } from '../../components/admin/CurriculumManager';
-import { CourseThumbnail } from '../../components/common/CourseThumbnail';
-import { Badge } from '../../components/common/Badge';
+import { CourseCover } from '../../components/common/CourseCover';
+import { CourseCard } from '../../components/student/CourseCard';
 import { Modal } from '../../components/common/Modal';
-import {
-  Save,
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  Layers,
-  Settings,
-  Eye,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Tag,
-  ImageIcon,
-  Video,
-  FileQuestion,
-  Sparkles,
-  Award,
-  UploadCloud,
-  Check,
-  AlertTriangle,
-} from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Eye, Plus, Save, Trash2, X } from 'lucide-react';
 
 interface AdminCourseEditorPageProps {
   courseId?: string;
   onNavigate: (view: string, param?: string) => void;
 }
 
-const WIZARD_STEPS = [
-  { id: 1, label: '기본 정보', desc: '제목·설명·강사' },
-  { id: 2, label: '강의 이미지', desc: '썸네일 등록' },
-  { id: 3, label: '커리큘럼', desc: '섹션 목차 구성' },
-  { id: 4, label: '동영상 / 콘텐츠', desc: '영상·강의 레슨' },
-  { id: 5, label: '퀴즈 & 평가', desc: '평가 문항 출제' },
-  { id: 6, label: '수강 설정', desc: '수료기준·태그' },
-  { id: 7, label: '미리보기', desc: '수강생 관점 검토' },
-  { id: 8, label: '게시 & 저장', desc: '공개 설정 및 완료' },
-];
+const STEPS = [
+  { id: 1, label: '기본 정보', desc: '제목, 분류, 강사, 썸네일' },
+  { id: 2, label: '커리큘럼', desc: '섹션, 영상, 퀴즈' },
+  { id: 3, label: '수강 설정', desc: '완료 기준, 학습 목표, 태그' },
+  { id: 4, label: '검토 · 게시', desc: '미리보기와 공개 설정' },
+] as const;
+const LAST_STEP = STEPS.length;
 
-export const AdminCourseEditorPage: React.FC<AdminCourseEditorPageProps> = ({
-  courseId,
-  onNavigate,
-}) => {
+/** Label + optional hint wrapper for form controls. */
+const Field: React.FC<{ label: string; required?: boolean; hint?: string; children: React.ReactNode }> = ({
+  label,
+  required,
+  hint,
+  children,
+}) => (
+  <label className="block space-y-1.5">
+    <span className="block text-[13px] font-medium text-neutral-800">
+      {label}
+      {required && <span className="ml-0.5 text-rose-500">*</span>}
+    </span>
+    {children}
+    {hint && <span className="block text-xs text-neutral-500">{hint}</span>}
+  </label>
+);
+
+/** Add/remove list of short strings (objectives, requirements, tags). */
+const ListEditor: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  onAdd: () => void;
+  items: string[];
+  onRemove: (idx: number) => void;
+  placeholder: string;
+  chip?: boolean;
+}> = ({ value, onChange, onAdd, items, onRemove, placeholder, chip }) => (
+  <div className="space-y-2">
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onAdd();
+          }
+        }}
+        placeholder={placeholder}
+        className="lms-input flex-1"
+      />
+      <button type="button" onClick={onAdd} className="lms-btn lms-btn-secondary shrink-0">
+        <Plus className="h-4 w-4" />
+        추가
+      </button>
+    </div>
+    {items.length > 0 &&
+      (chip ? (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((it, idx) => (
+            <span key={it} className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700">
+              #{it}
+              <button type="button" onClick={() => onRemove(idx)} aria-label={`${it} 삭제`} className="text-neutral-400 hover:text-rose-600 cursor-pointer">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+          {items.map((it, idx) => (
+            <li key={idx} className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-800">
+              <Check className="h-4 w-4 shrink-0 text-brand-600" />
+              <span className="min-w-0 flex-1">{it}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(idx)}
+                aria-label="삭제"
+                className="rounded p-1 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ))}
+  </div>
+);
+
+export const AdminCourseEditorPage: React.FC<AdminCourseEditorPageProps> = ({ courseId, onNavigate }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
 
@@ -95,7 +149,6 @@ export const AdminCourseEditorPage: React.FC<AdminCourseEditorPageProps> = ({
   const [requirementInput, setRequirementInput] = useState('');
   const [tagInput, setTagInput] = useState('');
 
-  // Sections and lessons for step 3, 4, 5, 7
   const [sections, setSections] = useState<CourseSection[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -104,15 +157,13 @@ export const AdminCourseEditorPage: React.FC<AdminCourseEditorPageProps> = ({
     setSections(storage.getSections(course.id));
     setLessons(storage.getLessons(course.id));
     const refreshed = storage.getCourseById(course.id);
-    if (refreshed) {
-      setCourse(refreshed);
-    }
+    if (refreshed) setCourse(refreshed);
   };
 
   const handleConfirmDelete = () => {
     const actor = user ? { id: user.id, name: user.name } : undefined;
     storage.deleteCourse(course.id, actor);
-    showToast(`'${course.title || '강의'}'가 성공적으로 영구 삭제되었습니다.`, 'success');
+    showToast(`'${course.title || '강의'}'가 삭제되었습니다.`, 'success');
     setIsDeleteModalOpen(false);
     onNavigate('admin-courses');
   };
@@ -121,877 +172,481 @@ export const AdminCourseEditorPage: React.FC<AdminCourseEditorPageProps> = ({
     reloadCurriculumData();
   }, [course.id]);
 
-  // Save current course state
   const handleSaveDraft = (silent = false) => {
     const cat = categories.find((c) => c.id === course.categoryId);
-    const updated: Course = {
-      ...course,
-      categoryName: cat?.name || course.categoryName,
-      updatedAt: new Date().toISOString(),
-    };
-
+    const updated: Course = { ...course, categoryName: cat?.name || course.categoryName, updatedAt: new Date().toISOString() };
     storage.saveCourse(updated);
     setCourse(updated);
-    if (!silent) {
-      showToast('강의 정보가 성공적으로 저장되었습니다.', 'success');
-    }
+    if (!silent) showToast('강의 정보를 저장했습니다.', 'success');
   };
 
-  // Step Validation
   const validateCurrentStep = (step: number): boolean => {
     if (step === 1) {
       if (!course.title.trim()) {
-        showToast('강의 제목을 입력해주세요.', 'error');
+        showToast('강의 제목을 입력해 주세요.', 'error');
         return false;
       }
       if (!course.instructorName.trim()) {
-        showToast('강사 성명을 입력해주세요.', 'error');
+        showToast('강사 이름을 입력해 주세요.', 'error');
         return false;
       }
     }
     return true;
   };
 
-  const handleNextStep = () => {
-    if (!validateCurrentStep(currentStep)) return;
+  const goToStep = (step: number) => {
+    if (step === currentStep) return;
+    if (step > currentStep && !validateCurrentStep(currentStep)) return;
     handleSaveDraft(true);
-    if (currentStep < 8) {
-      setCurrentStep((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    setCurrentStep(step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handlePrevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep((prev) => prev - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const handleAddTag = (tagToAdd?: string) => {
-    const raw = tagToAdd || tagInput;
-    const clean = raw.trim().replace(/^#/, '');
+  const handleAddTag = () => {
+    const clean = tagInput.trim().replace(/^#/, '');
     if (!clean) return;
-
     const existingTags = course.tags || [];
     if (existingTags.includes(clean)) {
       showToast('이미 등록된 태그입니다.', 'info');
-      setTagInput('');
-      return;
+    } else {
+      setCourse({ ...course, tags: [...existingTags, clean] });
     }
-
-    setCourse({
-      ...course,
-      tags: [...existingTags, clean],
-    });
     setTagInput('');
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setCourse({
-      ...course,
-      tags: (course.tags || []).filter((t) => t !== tagToRemove),
-    });
   };
 
   const handleAddObjective = () => {
     if (!objectiveInput.trim()) return;
-    setCourse({
-      ...course,
-      learningObjectives: [...(course.learningObjectives || []), objectiveInput.trim()],
-    });
+    setCourse({ ...course, learningObjectives: [...(course.learningObjectives || []), objectiveInput.trim()] });
     setObjectiveInput('');
-  };
-
-  const handleRemoveObjective = (idx: number) => {
-    setCourse({
-      ...course,
-      learningObjectives: course.learningObjectives?.filter((_, i) => i !== idx),
-    });
   };
 
   const handleAddRequirement = () => {
     if (!requirementInput.trim()) return;
-    setCourse({
-      ...course,
-      requirements: [...(course.requirements || []), requirementInput.trim()],
-    });
+    setCourse({ ...course, requirements: [...(course.requirements || []), requirementInput.trim()] });
     setRequirementInput('');
   };
 
-  const handleRemoveRequirement = (idx: number) => {
-    setCourse({
-      ...course,
-      requirements: course.requirements?.filter((_, i) => i !== idx),
-    });
-  };
+  const threshold = course.completionThresholdPercent ?? 80;
+  const quizCount = lessons.filter((l) => l.type === 'quiz' || l.type === 'exam').length;
+  const videoCount = lessons.filter((l) => l.type === 'video').length;
+  const checklist = [
+    { ok: !!course.title.trim(), label: '강의 제목' },
+    { ok: !!course.shortDescription.trim(), label: '한 줄 요약' },
+    { ok: sections.length > 0, label: '섹션 1개 이상' },
+    { ok: lessons.length > 0, label: '강의(레슨) 1개 이상' },
+    { ok: (course.learningObjectives || []).length > 0, label: '학습 목표' },
+  ];
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
-      {/* Top Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+    <div className="min-w-0 space-y-6 pb-12">
+      {/* Header */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={() => onNavigate('admin-courses')}
-            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
-            title="목록으로 돌아가기"
+            className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 cursor-pointer"
+            title="강의 목록으로"
+            aria-label="강의 목록으로"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                {isEditing ? `강의 편집: ${course.title || '제목 미지정'}` : '신규 강의 제작 스튜디오'}
-              </h2>
-              <Badge variant={course.isPublished ? 'success' : 'neutral'} size="sm">
-                {course.isPublished ? '공개 중' : '비공개 초안'}
-              </Badge>
+              <h1 className="truncate text-xl font-bold text-neutral-900">
+                {isEditing ? course.title || '제목 없는 강의' : '새 강의 만들기'}
+              </h1>
+              <span
+                className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium ${
+                  course.isPublished ? 'text-emerald-700' : 'text-neutral-500'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${course.isPublished ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+                {course.isPublished ? '공개' : '비공개'}
+              </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              8단계 가이드를 따라 완성도 높은 엔터프라이즈 강의를 제작하세요.
+            <p className="mt-0.5 text-[13px] text-neutral-500">
+              {STEPS.length}단계 중 {currentStep}단계 · {STEPS[currentStep - 1].label}
             </p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleSaveDraft()}
-            className="py-2 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Save className="w-4 h-4 text-slate-500" />
-            <span>임시 저장</span>
-          </button>
+        <div className="flex shrink-0 gap-2">
           {isEditing && (
             <>
-              <button
-                type="button"
-                onClick={() => onNavigate('course-detail', course.id)}
-                className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Eye className="w-4 h-4 text-slate-500" />
-                <span>수강생 화면 보기</span>
+              <button type="button" onClick={() => onNavigate('course-detail', course.id)} className="lms-btn lms-btn-ghost lms-btn-sm">
+                <Eye className="h-4 w-4" />
+                수강생 화면
               </button>
               <button
                 type="button"
                 onClick={() => setIsDeleteModalOpen(true)}
-                className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="강의 영구 삭제"
+                className="lms-btn lms-btn-ghost lms-btn-sm text-rose-600 hover:bg-rose-50"
               >
-                <Trash2 className="w-4 h-4 text-rose-600" />
-                <span>강의 삭제</span>
+                <Trash2 className="h-4 w-4" />
+                삭제
               </button>
             </>
           )}
+          <button type="button" onClick={() => handleSaveDraft()} className="lms-btn lms-btn-secondary lms-btn-sm">
+            <Save className="h-4 w-4" />
+            저장
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* 8-Step Progress Bar / Stepper */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[720px] gap-2">
-          {WIZARD_STEPS.map((step) => {
-            const isCurrent = currentStep === step.id;
-            const isCompleted = currentStep > step.id;
-
-            return (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => {
-                  if (validateCurrentStep(currentStep)) {
-                    handleSaveDraft(true);
-                    setCurrentStep(step.id);
-                  }
-                }}
-                className={`flex-1 flex items-center gap-2 p-2 rounded-xl transition-all cursor-pointer text-left ${
-                  isCurrent
-                    ? 'bg-indigo-50/80 border border-indigo-200'
-                    : isCompleted
-                    ? 'bg-slate-50 hover:bg-slate-100 border border-slate-100'
-                    : 'opacity-60 hover:opacity-100'
-                }`}
-              >
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                    isCurrent
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : isCompleted
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {isCompleted ? <Check className="w-3.5 h-3.5" /> : step.id}
-                </div>
-                <div className="min-w-0">
-                  <div
-                    className={`text-xs font-bold truncate ${
-                      isCurrent ? 'text-indigo-900' : 'text-slate-800'
+      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+        {/* Step navigation */}
+        <nav aria-label="편집 단계" className="lg:sticky lg:top-[88px]">
+          <ol className="-mx-4 flex gap-1 overflow-x-auto px-4 scrollbar-none lg:mx-0 lg:flex-col lg:px-0">
+            {STEPS.map((step) => {
+              const isCurrent = currentStep === step.id;
+              const isDone = currentStep > step.id;
+              return (
+                <li key={step.id} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => goToStep(step.id)}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors cursor-pointer ${
+                      isCurrent ? 'bg-white shadow-xs ring-1 ring-neutral-200' : 'hover:bg-neutral-100'
                     }`}
                   >
-                    {step.label}
-                  </div>
-                  <div className="text-[10px] text-slate-400 truncate">{step.desc}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Wizard Step Content Container */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
-        {/* STEP 01: 기본 정보 */}
-        {currentStep === 1 && (
-          <div className="space-y-6 max-w-3xl">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 01. 기본 정보 설정</h3>
-              <p className="text-xs text-slate-500 mt-0.5">강의 제목, 카테고리, 난이도 및 강사 정보를 입력합니다.</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  강의 제목 <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={course.title}
-                  onChange={(e) => setCourse({ ...course, title: e.target.value })}
-                  placeholder="예: [실무 완성] TypeScript & React 19 엔터프라이즈 아키텍처"
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    카테고리 분류 <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={course.categoryId}
-                    onChange={(e) => {
-                      const selected = categories.find((c) => c.id === e.target.value);
-                      setCourse({
-                        ...course,
-                        categoryId: e.target.value,
-                        categoryName: selected?.name || course.categoryName,
-                      });
-                    }}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">권장 난이도</label>
-                  <select
-                    value={course.level}
-                    onChange={(e) => setCourse({ ...course, level: e.target.value as CourseLevel })}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  >
-                    <option value="초급">초급 (입문자)</option>
-                    <option value="중급">중급 (실무 1~3년차)</option>
-                    <option value="고급">고급 (전문가 및 아키텍트)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    담당 강사 성명 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={course.instructorName}
-                    onChange={(e) => setCourse({ ...course, instructorName: e.target.value })}
-                    placeholder="강사 성명"
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">강사 직책 / 소속</label>
-                  <input
-                    type="text"
-                    value={course.instructorRole || ''}
-                    onChange={(e) => setCourse({ ...course, instructorRole: e.target.value })}
-                    placeholder="예: TDS 테크 리드 / 수석 엔지니어"
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">한 줄 요약 (목록 및 카드 노출용)</label>
-                <input
-                  type="text"
-                  value={course.shortDescription}
-                  onChange={(e) => setCourse({ ...course, shortDescription: e.target.value })}
-                  placeholder="강의 핵심 내용을 한 문장으로 간결하게 설명하세요."
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">상세 강의 소개</label>
-                <textarea
-                  rows={4}
-                  value={course.description}
-                  onChange={(e) => setCourse({ ...course, description: e.target.value })}
-                  placeholder="강의 전반의 목표, 학습 커리큘럼, 완강 후 습득 가능한 역량을 상세히 작성하세요."
-                  className="w-full p-3.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              {/* 강의 공식 공지사항 등록 (관리자/강사 직접 등록) */}
-              <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-indigo-950">
-                    강의 공식 공지사항 (Notice)
-                  </label>
-                  <span className="text-[11px] text-slate-500">선택 사항 (비워두면 공지가 노출되지 않음)</span>
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  강의 상세 페이지 및 수강 화면의 개요 탭 최상단에 강조 노출됩니다. 등록된 공지가 없으면 배너가 노출되지 않습니다.
-                </p>
-                <textarea
-                  rows={3}
-                  value={course.notice || ''}
-                  onChange={(e) => setCourse({ ...course, notice: e.target.value })}
-                  placeholder="수강생에게 전달할 주요 공지사항, 실습 환경 안내, 평가 주의사항 등을 입력하세요. (비워둘 시 공지 배너 미노출)"
-                  className="w-full p-3 text-xs bg-white border border-indigo-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
-                />
-              </div>
-
-              {/* 강사 지정 학습 완료 인정 기준 % */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-900">
-                    강사 지정 학습 완료 인정 시청률 (%)
-                  </label>
-                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                    현재: {course.completionThresholdPercent ?? 80}%
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  일반 수강생이 동영상 강의를 최소 몇 % 이상 시청해야 '학습 완료' 버튼을 클릭할 수 있는지 설정합니다. (기본값: 80%)
-                </p>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="50"
-                    max="100"
-                    step="5"
-                    value={course.completionThresholdPercent ?? 80}
-                    onChange={(e) =>
-                      setCourse({ ...course, completionThresholdPercent: Number(e.target.value) })
-                    }
-                    className="flex-1 accent-indigo-600 h-2 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                  <div className="flex items-center gap-1 shrink-0">
-                    <input
-                      type="number"
-                      min="10"
-                      max="100"
-                      value={course.completionThresholdPercent ?? 80}
-                      onChange={(e) => {
-                        const val = Math.max(10, Math.min(100, Number(e.target.value) || 80));
-                        setCourse({ ...course, completionThresholdPercent: val });
-                      }}
-                      className="w-16 px-2 py-1 text-xs text-center font-bold bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    />
-                    <span className="text-xs font-semibold text-slate-600">% 이상</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 02: 강의 이미지 */}
-        {currentStep === 2 && (
-          <div className="space-y-6 max-w-3xl">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 02. 대표 썸네일 이미지 등록</h3>
-              <p className="text-xs text-slate-500 mt-0.5">강의 목록 및 상세 페이지에 사용될 공식 썸네일을 설정합니다.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">이미지 URL 입력</label>
-                  <input
-                    type="url"
-                    value={course.thumbnail || ''}
-                    onChange={(e) => setCourse({ ...course, thumbnail: e.target.value })}
-                    placeholder="https://example.com/course-thumbnail.png"
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    URL을 비워두거나 로드 실패 시 공식 TDSNTLMS 브랜드 썸네일로 자동 처리됩니다.
-                  </p>
-                </div>
-
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                    <span>이미지 가이드라인 (Phase 6 준수)</span>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 text-slate-500 text-[11px]">
-                    <li>권장 해상도: 1280 x 720 px (16:9 비율)</li>
-                    <li>지원 포맷: PNG, JPG, WebP</li>
-                    <li>깨진 이미지나 로드 실패 시 무한 루프 없이 공식 TDS fallback으로 전환</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Live Preview Box */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                <div className="text-xs font-bold text-slate-700">썸네일 실시간 미리보기</div>
-                <div className="aspect-video w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center">
-                  <CourseThumbnail
-                    src={course.thumbnail}
-                    alt={course.title || '강의 썸네일'}
-                    containerClassName="w-full h-full"
-                    fallbackText={course.title.slice(0, 4)}
-                  />
-                </div>
-                <div className="text-[11px] text-slate-400 text-center">
-                  {course.thumbnail ? '사용자 등록 이미지' : '공식 TDS 기본 썸네일 적용'}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 03: 커리큘럼 섹션 구성 */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 03. 커리큘럼 섹션 및 목차 구성</h3>
-              <p className="text-xs text-slate-500 mt-0.5">강의를 구성할 주요 학습 섹션(대단원)을 생성하고 순서를 배치합니다.</p>
-            </div>
-
-            <CurriculumManager course={course} onUpdated={reloadCurriculumData} />
-          </div>
-        )}
-
-        {/* STEP 04: 동영상 / 콘텐츠 */}
-        {currentStep === 4 && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 04. 동영상 및 학습 콘텐츠 등록</h3>
-              <p className="text-xs text-slate-500 mt-0.5">각 섹션에 영상 레슨, YouTube 링크, 첨부 문서를 추가하고 재생 시간을 설정합니다.</p>
-            </div>
-
-            <CurriculumManager course={course} onUpdated={reloadCurriculumData} />
-          </div>
-        )}
-
-        {/* STEP 05: 퀴즈 & 평가 */}
-        {currentStep === 5 && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 05. 문제 및 퀴즈 출제</h3>
-              <p className="text-xs text-slate-500 mt-0.5">수강생의 이해도를 검증할 퀴즈 및 평가 시험 문항(객관식/OX/주관식)을 출제합니다.</p>
-            </div>
-
-            <CurriculumManager course={course} onUpdated={reloadCurriculumData} />
-          </div>
-        )}
-
-        {/* STEP 06: 수강 설정 */}
-        {currentStep === 6 && (
-          <div className="space-y-6 max-w-3xl">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 06. 수강 설정 및 태그</h3>
-              <p className="text-xs text-slate-500 mt-0.5">수강료, 학습 목표, 선수 지식 및 검색 태그를 설정합니다.</p>
-            </div>
-
-            <div className="space-y-5">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">수강료 설정 (원)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={course.price || 0}
-                  onChange={(e) => setCourse({ ...course, price: parseInt(e.target.value) || 0 })}
-                  className="w-full max-w-xs px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">0원 입력 시 전 수강생 무료 공개 강의로 운영됩니다.</p>
-              </div>
-
-              {/* Learning Objectives */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <label className="block text-xs font-bold text-slate-800">학습 목표 항목</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={objectiveInput}
-                    onChange={(e) => setObjectiveInput(e.target.value)}
-                    placeholder="예: React 19 Actions와 폼 상태 관리 완벽 정복"
-                    className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddObjective}
-                    className="py-2 px-3 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>추가</span>
-                  </button>
-                </div>
-
-                <div className="space-y-1.5">
-                  {(course.learningObjectives || []).map((obj, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{obj}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveObjective(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Requirements */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <label className="block text-xs font-bold text-slate-800">선수 지식 및 준비물</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={requirementInput}
-                    onChange={(e) => setRequirementInput(e.target.value)}
-                    placeholder="예: JavaScript ES6+ 문법 기본 이해"
-                    className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddRequirement}
-                    className="py-2 px-3 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>추가</span>
-                  </button>
-                </div>
-
-                <div className="space-y-1.5">
-                  {(course.requirements || []).map((req, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between text-xs"
-                    >
-                      <span>{req}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRequirement(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <label className="block text-xs font-bold text-slate-800">검색 태그</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddTag();
-                      }
-                    }}
-                    placeholder="#React #TypeScript #FullStack"
-                    className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAddTag()}
-                    className="py-2 px-3 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>추가</span>
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {(course.tags || []).map((tag) => (
                     <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700"
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                        isCurrent
+                          ? 'bg-brand-600 text-white'
+                          : isDone
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'bg-neutral-200 text-neutral-600'
+                      }`}
                     >
-                      #{tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                      >
-                        ×
-                      </button>
+                      {isDone ? <Check className="h-3.5 w-3.5" /> : step.id}
                     </span>
-                  ))}
-                </div>
-              </div>
-            </div>
+                    <span className="min-w-0">
+                      <span className={`block whitespace-nowrap text-sm font-medium ${isCurrent ? 'text-neutral-900' : 'text-neutral-600'}`}>
+                        {step.label}
+                      </span>
+                      <span className="hidden truncate text-xs text-neutral-400 lg:block">{step.desc}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        {/* Step content */}
+        <section className="min-w-0 rounded-xl border border-neutral-200 bg-white">
+          <div className="border-b border-neutral-200 px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold text-neutral-900">{STEPS[currentStep - 1].label}</h2>
+            <p className="mt-0.5 text-[13px] text-neutral-500">{STEPS[currentStep - 1].desc}</p>
           </div>
-        )}
 
-        {/* STEP 07: 미리보기 */}
-        {currentStep === 7 && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 07. 수강생 관점 미리보기</h3>
-              <p className="text-xs text-slate-500 mt-0.5">실제 수강생에게 표시될 강의 카드 및 상세 구성을 확인합니다.</p>
-            </div>
+          <div className="p-5 sm:p-6">
+            {currentStep === 1 && (
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="space-y-5">
+                  <Field label="강의 제목" required>
+                    <input
+                      type="text"
+                      required
+                      value={course.title}
+                      onChange={(e) => setCourse({ ...course, title: e.target.value })}
+                      placeholder="예: 신입사원 온보딩 - TDS의 일하는 방식"
+                      className="lms-input"
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="카테고리" required>
+                      <select
+                        value={course.categoryId}
+                        onChange={(e) => {
+                          const selected = categories.find((c) => c.id === e.target.value);
+                          setCourse({ ...course, categoryId: e.target.value, categoryName: selected?.name || course.categoryName });
+                        }}
+                        className="lms-input"
+                      >
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="난이도">
+                      <select
+                        value={course.level}
+                        onChange={(e) => setCourse({ ...course, level: e.target.value as CourseLevel })}
+                        className="lms-input"
+                      >
+                        <option value="초급">초급</option>
+                        <option value="중급">중급</option>
+                        <option value="고급">고급</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="강사 이름" required>
+                      <input
+                        type="text"
+                        required
+                        value={course.instructorName}
+                        onChange={(e) => setCourse({ ...course, instructorName: e.target.value })}
+                        className="lms-input"
+                      />
+                    </Field>
+                    <Field label="강사 직책 · 소속">
+                      <input
+                        type="text"
+                        value={course.instructorRole || ''}
+                        onChange={(e) => setCourse({ ...course, instructorRole: e.target.value })}
+                        placeholder="예: 인사팀 리드"
+                        className="lms-input"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="한 줄 요약" hint="강의 카드와 상세 화면 상단에 표시됩니다.">
+                    <input
+                      type="text"
+                      value={course.shortDescription}
+                      onChange={(e) => setCourse({ ...course, shortDescription: e.target.value })}
+                      placeholder="강의 핵심을 한 문장으로 적어 주세요."
+                      className="lms-input"
+                    />
+                  </Field>
+                  <Field label="상세 소개">
+                    <textarea
+                      rows={5}
+                      value={course.description}
+                      onChange={(e) => setCourse({ ...course, description: e.target.value })}
+                      placeholder="강의 목표, 다루는 내용, 수강 후 할 수 있게 되는 것을 적어 주세요."
+                      className="lms-input h-auto resize-y py-2.5 leading-relaxed"
+                    />
+                  </Field>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Preview Card */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-                <CourseThumbnail
-                  src={course.thumbnail}
-                  alt={course.title}
-                  containerClassName="w-full aspect-video border-b border-slate-100"
-                  fallbackText={course.title.slice(0, 4)}
-                />
-                <div className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-indigo-600">{course.categoryName}</span>
-                    <Badge variant="neutral" size="sm">
-                      {course.level}
-                    </Badge>
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-sm line-clamp-2">{course.title || '강의 제목 미지정'}</h4>
-                  <p className="text-xs text-slate-500 line-clamp-2">{course.shortDescription || '한 줄 요약이 없습니다.'}</p>
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                    <span>{course.instructorName} 강사</span>
-                    <span className="font-bold text-slate-900">{course.price === 0 ? '무료' : `${course.price?.toLocaleString()}원`}</span>
-                  </div>
+                <div className="space-y-3">
+                  <Field label="썸네일 이미지 URL" hint="16:9 비율 권장. 비워 두면 카테고리 표지가 자동으로 쓰입니다.">
+                    <input
+                      type="url"
+                      value={course.thumbnail || ''}
+                      onChange={(e) => setCourse({ ...course, thumbnail: e.target.value })}
+                      placeholder="https://"
+                      className="lms-input"
+                    />
+                  </Field>
+                  <CourseCover
+                    thumbnail={course.thumbnail}
+                    title={course.title || '강의 썸네일'}
+                    categoryId={course.categoryId}
+                    className="aspect-video w-full rounded-lg border border-neutral-200"
+                  />
                 </div>
               </div>
+            )}
 
-              {/* Summary Stats */}
-              <div className="md:col-span-2 space-y-4">
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
-                  <h4 className="font-bold text-slate-800">커리큘럼 구성 현황</h4>
-                  <div className="grid grid-cols-3 gap-3 pt-2">
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <div className="text-slate-400 text-[11px]">등록 섹션</div>
-                      <div className="text-lg font-bold text-slate-900">{sections.length}개</div>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <div className="text-slate-400 text-[11px]">총 레슨 수</div>
-                      <div className="text-lg font-bold text-slate-900">{lessons.length}개</div>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 text-center">
-                      <div className="text-slate-400 text-[11px]">평가 퀴즈</div>
-                      <div className="text-lg font-bold text-indigo-600">
-                        {lessons.filter((l) => l.type === 'quiz' || l.type === 'exam').length}개
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            {currentStep === 2 && <CurriculumManager course={course} onUpdated={reloadCurriculumData} />}
 
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
-                  <h4 className="font-bold text-slate-800">학습 목표 ({course.learningObjectives?.length || 0}개)</h4>
-                  <ul className="list-disc list-inside text-slate-600 space-y-1">
-                    {(course.learningObjectives || []).map((obj, i) => (
-                      <li key={i}>{obj}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 08: 게시 & 저장 */}
-        {currentStep === 8 && (
-          <div className="space-y-6 max-w-2xl">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Step 08. 최종 검토 및 게시</h3>
-              <p className="text-xs text-slate-500 mt-0.5">강의 공개 상태를 확인하고 최종 개설을 완료합니다.</p>
-            </div>
-
-            <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">공개 운영 여부</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    [공개 중]으로 설정하면 전체 수강생 홈 및 검색 목록에 즉시 노출됩니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCourse({ ...course, isPublished: !course.isPublished })}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    course.isPublished
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
-                  }`}
+            {currentStep === 3 && (
+              <div className="max-w-2xl space-y-8">
+                <Field
+                  label={`학습 완료 기준: 영상 ${threshold}% 이상 시청`}
+                  hint="수강생이 이 비율 이상 영상을 봐야 '학습 완료'를 누를 수 있습니다. (기본 80%)"
                 >
-                  {course.isPublished ? '공개 운영 중' : '비공개 초안'}
-                </button>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="50"
+                      max="100"
+                      step="5"
+                      value={threshold}
+                      onChange={(e) => setCourse({ ...course, completionThresholdPercent: Number(e.target.value) })}
+                      className="h-2 flex-1 cursor-pointer accent-brand-600"
+                    />
+                    <span className="w-12 text-right text-sm font-semibold tabular-nums text-neutral-900">{threshold}%</span>
+                  </div>
+                </Field>
+
+                <Field label="학습 목표" hint="강의 상세의 '이 과정에서 배우는 것'에 표시됩니다.">
+                  <ListEditor
+                    value={objectiveInput}
+                    onChange={setObjectiveInput}
+                    onAdd={handleAddObjective}
+                    items={course.learningObjectives || []}
+                    onRemove={(idx) => setCourse({ ...course, learningObjectives: course.learningObjectives?.filter((_, i) => i !== idx) })}
+                    placeholder="예: 사내 보안 정책을 업무에 적용할 수 있다"
+                  />
+                </Field>
+
+                <Field label="수강 전 준비">
+                  <ListEditor
+                    value={requirementInput}
+                    onChange={setRequirementInput}
+                    onAdd={handleAddRequirement}
+                    items={course.requirements || []}
+                    onRemove={(idx) => setCourse({ ...course, requirements: course.requirements?.filter((_, i) => i !== idx) })}
+                    placeholder="예: 사내 계정"
+                  />
+                </Field>
+
+                <Field label="검색 태그" hint="'필수교육', '보안' 태그가 있으면 홈의 필수 교육에도 표시됩니다.">
+                  <ListEditor
+                    value={tagInput}
+                    onChange={setTagInput}
+                    onAdd={handleAddTag}
+                    items={course.tags || []}
+                    onRemove={(idx) => setCourse({ ...course, tags: (course.tags || []).filter((_, i) => i !== idx) })}
+                    placeholder="태그 입력 후 Enter"
+                    chip
+                  />
+                </Field>
+
+                <Field label="강의 공지" hint="입력하면 강의 상세와 학습 화면 상단에 표시됩니다. 비워 두면 표시되지 않습니다.">
+                  <textarea
+                    rows={3}
+                    value={course.notice || ''}
+                    onChange={(e) => setCourse({ ...course, notice: e.target.value })}
+                    placeholder="실습 환경 안내, 평가 일정 등"
+                    className="lms-input h-auto resize-y py-2.5 leading-relaxed"
+                  />
+                </Field>
               </div>
+            )}
 
-              <div className="pt-3 border-t border-slate-200 text-xs space-y-1.5 text-slate-600">
-                <div className="flex justify-between">
-                  <span>강의 제목:</span>
-                  <span className="font-bold text-slate-900">{course.title}</span>
+            {currentStep === 4 && (
+              <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  <p className="text-[13px] font-medium text-neutral-500">강의 카드 미리보기</p>
+                  <div className="pointer-events-none">
+                    <CourseCard course={{ ...course, totalLessons: lessons.length }} onSelect={() => {}} />
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>카테고리:</span>
-                  <span className="font-medium text-slate-800">{course.categoryName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>총 레슨:</span>
-                  <span className="font-medium text-slate-800">{lessons.length}강</span>
+
+                <div className="space-y-6">
+                  <dl className="grid grid-cols-3 divide-x divide-neutral-200 rounded-lg border border-neutral-200">
+                    {[
+                      { label: '섹션', value: sections.length },
+                      { label: '영상', value: videoCount },
+                      { label: '퀴즈 · 평가', value: quizCount },
+                    ].map((s) => (
+                      <div key={s.label} className="px-4 py-3 text-center">
+                        <dd className="text-xl font-bold tabular-nums text-neutral-900">{s.value}</dd>
+                        <dt className="text-xs text-neutral-500">{s.label}</dt>
+                      </div>
+                    ))}
+                  </dl>
+
+                  <div>
+                    <p className="mb-2 text-[13px] font-medium text-neutral-800">게시 전 점검</p>
+                    <ul className="space-y-1.5">
+                      {checklist.map((c) => (
+                        <li key={c.label} className="flex items-center gap-2 text-sm">
+                          {c.ok ? (
+                            <Check className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          )}
+                          <span className={c.ok ? 'text-neutral-700' : 'text-neutral-500'}>{c.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 p-4">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900">수강생에게 공개</p>
+                      <p className="mt-0.5 text-[13px] text-neutral-500">켜면 홈과 검색 결과에 바로 표시됩니다.</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={course.isPublished}
+                      onClick={() => setCourse({ ...course, isPublished: !course.isPublished })}
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+                        course.isPublished ? 'bg-brand-600' : 'bg-neutral-300'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-xs transition-all ${
+                          course.isPublished ? 'left-[22px]' : 'left-0.5'
+                        }`}
+                      />
+                      <span className="sr-only">공개 여부</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSaveDraft();
+                        onNavigate('admin-courses');
+                      }}
+                      className="lms-btn lms-btn-primary"
+                    >
+                      <Check className="h-4 w-4" />
+                      저장하고 목록으로
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSaveDraft(true);
+                        onNavigate('course-detail', course.id);
+                      }}
+                      className="lms-btn lms-btn-secondary"
+                    >
+                      수강생 화면에서 보기
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  handleSaveDraft();
-                  onNavigate('admin-courses');
-                }}
-                className="py-3 px-6 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>강의 제작 완료 및 목록으로 이동</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  handleSaveDraft();
-                  onNavigate('course-detail', course.id);
-                }}
-                className="py-3 px-5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-              >
-                <span>수강 화면 바로가기</span>
-              </button>
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Wizard Footer Step Navigation Controls */}
-        <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={handlePrevStep}
-            disabled={currentStep === 1}
-            className={`py-2 px-4 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer ${
-              currentStep === 1
-                ? 'opacity-40 cursor-not-allowed text-slate-400 bg-slate-100'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>이전 단계</span>
-          </button>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between border-t border-neutral-200 px-5 py-3.5 sm:px-6">
             <button
               type="button"
-              onClick={() => handleSaveDraft()}
-              className="py-2 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+              onClick={() => goToStep(currentStep - 1)}
+              disabled={currentStep === 1}
+              className="lms-btn lms-btn-ghost lms-btn-sm"
             >
-              <Save className="w-3.5 h-3.5 text-slate-500" />
-              <span>임시 저장</span>
+              <ArrowLeft className="h-4 w-4" />
+              이전
             </button>
-
-            {currentStep < 8 && (
-              <button
-                type="button"
-                onClick={handleNextStep}
-                className="py-2 px-5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <span>다음 단계</span>
-                <ArrowRight className="w-4 h-4" />
+            {currentStep < LAST_STEP && (
+              <button type="button" onClick={() => goToStep(currentStep + 1)} className="lms-btn lms-btn-primary lms-btn-sm">
+                다음
+                <ArrowRight className="h-4 w-4" />
               </button>
             )}
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* Course Delete Confirmation Modal */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="강의 영구 삭제 확인"
-      >
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="강의 삭제">
         <div className="space-y-4">
-          <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">현재 편집 중인 강의를 영구 삭제하시겠습니까?</p>
-              <p className="mt-1 text-rose-700 leading-relaxed">
-                삭제 시 해당 강의에 등록된 모든 커리큘럼(섹션, 레슨 영상), 퀴즈 및 시험 문항, 수강생들의 진도율, 수료증 및 학습 이력 데이터가 영구 파기되며 복구할 수 없습니다.
-              </p>
-            </div>
+          <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-800">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+            <p className="leading-relaxed">
+              <strong className="font-semibold">'{course.title || '제목 없는 강의'}'</strong>를 삭제하면 커리큘럼, 퀴즈, 수강생 진도와
+              수료 기록이 모두 지워지며 되돌릴 수 없습니다.
+            </p>
           </div>
-
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm truncate max-w-[320px]">{course.title || '제목 미지정 강의'}</span>
-              <Badge variant={course.isPublished ? 'success' : 'neutral'} size="sm">
-                {course.isPublished ? '공개 중' : '비공개'}
-              </Badge>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5 text-slate-500 text-[11px] pt-1">
-              <span>강사: <strong className="text-slate-700">{course.instructorName}</strong></span>
-              <span>•</span>
-              <span>수강생: <strong className="text-indigo-600 font-bold">{course.enrolledCount}명</strong></span>
-              <span>•</span>
-              <span>총 <strong className="text-slate-700">{course.totalLessons}강</strong></span>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="px-4 py-2 font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-            >
+          <p className="text-[13px] text-neutral-500">
+            강사 {course.instructorName} · 수강생 {course.enrolledCount}명 · {course.totalLessons}강
+          </p>
+          <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+            <button type="button" onClick={() => setIsDeleteModalOpen(false)} className="lms-btn lms-btn-secondary">
               취소
             </button>
             <button
               type="button"
               id="btn-confirm-delete-editor-course"
               onClick={handleConfirmDelete}
-              className="px-4 py-2 font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+              className="lms-btn bg-rose-600 text-white hover:bg-rose-700"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>영구 삭제 실행</span>
+              <Trash2 className="h-4 w-4" />
+              삭제
             </button>
           </div>
         </div>
