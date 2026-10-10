@@ -17,6 +17,7 @@ import {
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
+import { isCloudStorageEnabled, uploadToCloud, deleteFromCloud } from './cloudStorage';
 
 dotenv.config();
 
@@ -56,6 +57,18 @@ export interface ServerVideoRecord {
   uploaded_at: string;
   uploaded_by?: string;
   status: 'ready' | 'processing' | 'uploading' | 'failed';
+  storage_path?: string; // Firebase Storage object path when stored in the cloud bucket
+}
+
+// Move a finished local upload into Firebase Storage (no-op when cloud storage is off).
+// Returns the public URL to store, or null to keep serving the local file.
+async function moveToCloudStorage(localPath: string, storagePath: string, contentType: string): Promise<string | null> {
+  if (!isCloudStorageEnabled) return null;
+  const url = await uploadToCloud(localPath, storagePath, contentType);
+  try {
+    fs.unlinkSync(localPath);
+  } catch {}
+  return url;
 }
 
 let serverVideoStore: Record<string, ServerVideoRecord> = {};
@@ -173,9 +186,21 @@ async function deleteVideoFromDatabase(idOrFilename: string) {
   }
 
   const videoId = target?.video_id || idOrFilename;
-  const filename = target ? path.basename(target.video_url) : idOrFilename;
+  const filename = target?.storage_path
+    ? path.basename(target.storage_path)
+    : target
+      ? path.basename(target.video_url)
+      : idOrFilename;
 
-  // 1. Delete physical file from UPLOADS_DIR
+  // 1. Delete the stored file (Firebase Storage object or physical file in UPLOADS_DIR)
+  if (target?.storage_path) {
+    try {
+      await deleteFromCloud(target.storage_path);
+      console.log(`[Video] Storage object ${target.storage_path} removed.`);
+    } catch (err) {
+      console.warn('[Video] Failed to delete video from Firebase Storage:', err);
+    }
+  }
   const filePath = path.join(UPLOADS_DIR, filename);
   if (fs.existsSync(filePath)) {
     try {
@@ -510,7 +535,8 @@ initAdminAccounts();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Hosting platforms (Render etc.) inject PORT; locally it is 3000.
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -1584,12 +1610,19 @@ async function startServer() {
   });
 
   // API User Profile Avatar Upload
-  app.post('/api/me/avatar', avatarUpload.single('avatar'), (req, res) => {
+  app.post('/api/me/avatar', avatarUpload.single('avatar'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: '업로드할 이미지 파일을 선택해주세요.' });
     }
 
-    const avatarUrl = `/api/uploads/avatars/${req.file.filename}`;
+    let avatarUrl = `/api/uploads/avatars/${req.file.filename}`;
+    try {
+      const cloudUrl = await moveToCloudStorage(req.file.path, `avatars/${req.file.filename}`, req.file.mimetype);
+      if (cloudUrl) avatarUrl = cloudUrl;
+    } catch (err) {
+      console.error('Failed to store avatar in Firebase Storage:', err);
+      return res.status(500).json({ success: false, message: '프로필 사진 저장에 실패했습니다.' });
+    }
     return res.json({
       success: true,
       avatarUrl,
@@ -1624,10 +1657,18 @@ async function startServer() {
   });
 
   // API Delete User Profile Avatar
-  app.delete('/api/me/avatar/:filename', (req, res) => {
+  app.delete('/api/me/avatar/:filename', async (req, res) => {
     const filename = req.params.filename;
     const safeFilename = path.basename(filename);
     const filePath = path.join(AVATARS_DIR, safeFilename);
+
+    if (/^avatar_[\w-]+\.\w+$/.test(safeFilename)) {
+      try {
+        await deleteFromCloud(`avatars/${safeFilename}`);
+      } catch (err) {
+        console.error('Failed to delete avatar from Firebase Storage:', err);
+      }
+    }
 
     if (fs.existsSync(filePath)) {
       try {
@@ -2337,12 +2378,15 @@ async function startServer() {
         });
       }
       const finalMime = mimeType || 'video/mp4';
-      const streamingUrl = `/api/videos/stream/${targetFilename}`;
+      const storagePath = `videos/${targetFilename}`;
+      const cloudUrl = await moveToCloudStorage(targetFilePath, storagePath, finalMime);
+      const streamingUrl = cloudUrl || `/api/videos/stream/${targetFilename}`;
 
       const record: ServerVideoRecord = {
         video_id: videoId,
         file_name: cleanFilename,
         video_url: streamingUrl,
+        ...(cloudUrl ? { storage_path: storagePath } : {}),
         thumbnail_url: (req.body?.thumbnailUrl as string) || undefined,
         file_size: stats.size,
         mime_type: finalMime,
@@ -2466,12 +2510,15 @@ async function startServer() {
         const file = req.file;
         const videoId = path.basename(file.filename, path.extname(file.filename));
         const mimeType = file.mimetype || 'video/mp4';
-        const streamingUrl = `/api/videos/stream/${file.filename}`;
+        const storagePath = `videos/${file.filename}`;
+        const cloudUrl = await moveToCloudStorage(file.path, storagePath, mimeType);
+        const streamingUrl = cloudUrl || `/api/videos/stream/${file.filename}`;
 
         const record: ServerVideoRecord = {
           video_id: videoId,
           file_name: file.originalname,
           video_url: streamingUrl,
+          ...(cloudUrl ? { storage_path: storagePath } : {}),
           thumbnail_url: (req.body?.thumbnailUrl as string) || undefined,
           file_size: file.size,
           mime_type: mimeType,

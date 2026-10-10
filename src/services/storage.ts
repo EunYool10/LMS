@@ -431,7 +431,7 @@ export class TDSNTLMSStorage {
         if (!les.sourceType) {
           les.sourceType = les.videoUrl?.includes("youtube") || les.videoUrl?.includes("youtu.be")
             ? "YOUTUBE"
-            : les.videoUrl?.includes("/api/videos/stream")
+            : les.videoUrl?.includes("/api/videos/stream") || les.videoUrl?.includes("firebasestorage.googleapis.com")
             ? "UPLOAD"
             : "URL";
         }

@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 업로드와 삭제는 서버(Firebase Admin SDK)만 합니다. Admin SDK는 이 규칙을 거치지 않습니다.
+// 재생·표시는 토큰이 붙은 다운로드 URL로 하므로, 브라우저의 직접 읽기·쓰기는 모두 막아 둡니다.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

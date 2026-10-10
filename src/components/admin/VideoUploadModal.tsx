@@ -87,7 +87,9 @@ export const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   const previewVideoRef = useRef<HTMLVideoElement>(null);
 
   const initialTab =
-    lesson?.videoUrl?.startsWith('http') && !lesson.videoUrl.includes('/api/videos/stream')
+    lesson?.videoUrl?.startsWith('http') &&
+    !lesson.videoUrl.includes('/api/videos/stream') &&
+    !lesson.videoUrl.includes('firebasestorage.googleapis.com')
       ? 'url'
       : 'file';
 
