@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    match /progress/{progressId} {
+      allow read: if true;
+      allow write: if isValidId(progressId);
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if true;
+      allow write: if isValidId(enrollmentId);
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if isValidId(reviewId);
+    }
+
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow write: if isValidId(certificateId);
+    }
+
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if isValidId(videoId);
+    }
+
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isValidId(courseId);
+    }
+
+    match /sections/{sectionId} {
+      allow read: if true;
+      allow write: if isValidId(sectionId);
+    }
+
+    match /lessons/{lessonId} {
+      allow read: if true;
+      allow write: if isValidId(lessonId);
+    }
+
+    match /system_announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isValidId(announcementId);
+    }
+
+    match /course_announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isValidId(announcementId);
+    }
+
+    match /system_settings/{settingsId} {
+      allow read: if true;
+      allow write: if isValidId(settingsId);
+    }
+  }
+}

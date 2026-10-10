@@ -1,0 +1,714 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-muted: #94a3b8;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+@layer base {
+  body {
+    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    color: #0f172a;
+    background-color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Typography scale */
+  h1 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Professional LMS Design System Utilities */
+.lms-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem; /* 12px */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lms-card-interactive {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.lms-card-interactive:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  transform: translateY(-2px);
+}
+
+.lms-input {
+  width: 100%;
+  height: 2.5rem; /* 40px */
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem; /* 8px */
+  transition: all 0.15s ease;
+}
+
+.lms-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.lms-input::placeholder {
+  color: #94a3b8;
+}
+
+/* User-requested standard container: width: min(100% - 32px, 1280px); margin: 0 auto; */
+.lms-container {
+  width: min(100% - 32px, 1280px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Mobile Safe Area and Viewport Height */
+.min-h-screen-dvh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.h-screen-dvh {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Celebration & Confetti Animations */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-40px) rotate(0deg) rotateX(0deg) scale(0.8);
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(720deg) rotateX(360deg) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes confetti-sway {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(30px);
+  }
+}
+
+@keyframes trophy-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.05);
+  }
+}
+
+@keyframes aura-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.7;
+  }
+}
+
+@keyframes sparkle-twinkle {
+  0%, 100% {
+    transform: scale(0.6) rotate(0deg);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2) rotate(45deg);
+    opacity: 1;
+  }
+}
+
+@keyframes celebration-pop {
+  0% {
+    transform: translate(-50%, -46%) scale(0.88);
+    opacity: 0;
+  }
+  70% {
+    transform: translate(-50%, -50.5%) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ribbon-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-confetti-fall {
+  animation: confetti-fall linear forwards;
+}
+
+.animate-confetti-sway {
+  animation: confetti-sway ease-in-out infinite;
+}
+
+.animate-trophy-bounce {
+  animation: trophy-bounce 2.5s ease-in-out infinite;
+}
+
+.animate-aura-pulse {
+  animation: aura-pulse 3s ease-in-out infinite;
+}
+
+.animate-sparkle-twinkle {
+  animation: sparkle-twinkle 1.8s ease-in-out infinite;
+}
+
+.animate-celebration-pop {
+  animation: celebration-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ribbon-shimmer {
+  background-size: 200% auto;
+  animation: ribbon-shimmer 3s linear infinite;
+}
+
+/* ==========================================================================
+   ADMIN ACHIEVEMENT RAINBOW WAVE BORDER ANIMATIONS
+   ========================================================================== */
+@keyframes rainbowWave {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.rainbow-wave-wrapper {
+  position: relative;
+  border-radius: 1rem;
+  background: transparent;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.rainbow-wave-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: calc(1rem + 1.5px);
+  background: linear-gradient(
+    90deg,
+    #ef4444,
+    #f97316,
+    #f59e0b,
+    #10b981,
+    #06b6d4,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #ef4444
+  );
+  background-size: 300% 300%;
+  animation: rainbowWave 4.5s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 10px -2px rgba(99, 102, 241, 0.25);
+}
+
+.rainbow-wave-wrapper-subtle::before {
+  opacity: 0.75;
+  box-shadow: 0 0 8px -2px rgba(99, 102, 241, 0.2);
+}
+
+.rainbow-wave-inner {
+  position: relative;
+  background: #ffffff;
+  border-radius: calc(1rem - 1px);
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rainbow-wave-wrapper::before {
+    animation: none !important;
+    background-position: 50% 50%;
+  }
+}
+
+/* ==========================================================================
+   PROFILE AVATAR ACHIEVEMENT FRAMES & DECORATIONS
+   ========================================================================== */
+@keyframes conicRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes neonPulse {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 4px currentColor);
+    opacity: 0.85;
+  }
+  50% {
+    filter: brightness(1.35) drop-shadow(0 0 16px currentColor);
+    opacity: 1;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.035);
+    opacity: 0.95;
+  }
+}
+
+@keyframes borderFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes shineSweep {
+  0% { transform: translateX(-150%) rotate(45deg); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateX(200%) rotate(45deg); opacity: 0; }
+}
+
+@keyframes blinkEffect {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+@keyframes sparkleFloat {
+  0%, 100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-4px) scale(1.15);
+    opacity: 1;
+  }
+}
+
+.avatar-frame-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.875rem;
+  padding: 3px;
+  isolation: isolate;
+  transition: all 0.25s ease;
+}
+
+/* Admin 1: System Admin (Cyan -> Blue -> Purple -> Pink) */
+.avatar-frame-admin-system::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #06b6d4);
+  background-size: 300% 300%;
+  animation: borderFlow 4s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+}
+
+/* Admin 2: Ops Admin (Orange -> Yellow -> Pink -> Purple) */
+.avatar-frame-admin-ops::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f97316, #facc15, #ec4899, #8b5cf6, #f97316);
+  background-size: 300% 300%;
+  animation: borderFlow 3.5s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.5);
+}
+
+/* Admin 3: Data Admin (Green -> Cyan -> Blue) */
+.avatar-frame-admin-data::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #10b981, #06b6d4, #3b82f6, #10b981);
+  background-size: 300% 300%;
+  animation: borderFlow 4s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
+}
+
+/* Admin 4: Security Admin (Blue -> Cyan -> Purple Neon) */
+.avatar-frame-admin-security::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(45deg, #3b82f6, #06b6d4, #8b5cf6, #3b82f6);
+  background-size: 300% 300%;
+  animation: borderFlow 3s ease infinite, neonPulse 2.5s ease-in-out infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.5);
+}
+
+/* Admin 5: Super Admin (Full 360 Spectrum Rainbow Wave) */
+.avatar-frame-admin-super::before,
+.avatar-frame-rainbow::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    #ef4444,
+    #f97316,
+    #f59e0b,
+    #10b981,
+    #06b6d4,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #ef4444
+  );
+  background-size: 300% 300%;
+  animation: rainbowWave 4s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+}
+
+/* Admin 6: Cert Admin (Purple -> Pink -> Gold) */
+.avatar-frame-admin-cert::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b, #8b5cf6);
+  background-size: 300% 300%;
+  animation: borderFlow 4s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.45);
+}
+
+/* Admin 7: Community Manager (Pink -> Rose -> Violet -> Cyan) */
+.avatar-frame-admin-community::before {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #ec4899, #f43f5e, #a855f7, #06b6d4);
+  background-size: 300% 300%;
+  animation: borderFlow 3.5s ease infinite;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-frame-admin-system::before,
+  .avatar-frame-admin-ops::before,
+  .avatar-frame-admin-data::before,
+  .avatar-frame-admin-security::before,
+  .avatar-frame-admin-super::before,
+  .avatar-frame-admin-cert::before,
+  .avatar-frame-admin-community::before,
+  .avatar-frame-rainbow::before {
+    animation: none !important;
+    background-position: 50% 50% !important;
+  }
+}
+
+/* Responsive Frame Sizes */
+.avatar-frame-wrapper.avatar-frame-xs {
+  padding: 1.5px;
+  border-radius: 0.5rem;
+}
+.avatar-frame-wrapper.avatar-frame-xs::before {
+  inset: -1.5px;
+  box-shadow: 0 0 4px rgba(139, 92, 246, 0.25);
+}
+
+.avatar-frame-wrapper.avatar-frame-sm {
+  padding: 2px;
+  border-radius: 0.625rem;
+}
+.avatar-frame-wrapper.avatar-frame-sm::before {
+  inset: -2px;
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.3);
+}
+
+.avatar-frame-wrapper.avatar-frame-md {
+  padding: 2.5px;
+  border-radius: 0.75rem;
+}
+.avatar-frame-wrapper.avatar-frame-md::before {
+  inset: -2.5px;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+}
+
+.avatar-frame-wrapper.avatar-frame-lg {
+  padding: 3.5px;
+  border-radius: 1rem;
+}
+.avatar-frame-wrapper.avatar-frame-lg::before {
+  inset: -4px;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.45);
+}
+
+.avatar-frame-wrapper.avatar-frame-xl {
+  padding: 4.5px;
+  border-radius: 1.15rem;
+}
+.avatar-frame-wrapper.avatar-frame-xl::before {
+  inset: -5.5px;
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.55);
+}
+
+.avatar-frame-wrapper.avatar-frame-2xl {
+  padding: 5.5px;
+  border-radius: 1.35rem;
+}
+.avatar-frame-wrapper.avatar-frame-2xl::before {
+  inset: -6.5px;
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.65);
+}
+
+/* Standard General Achievement Frames */
+.avatar-frame-emerald {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #10b981, 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+.avatar-frame-blue {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #3b82f6, 0 0 12px rgba(59, 130, 246, 0.4);
+}
+
+.avatar-frame-purple {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #a855f7, 0 0 14px rgba(168, 85, 247, 0.45);
+}
+
+.avatar-frame-cyan {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #06b6d4, 0 0 14px rgba(6, 182, 212, 0.45);
+}
+
+.avatar-frame-gold {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #f59e0b, 0 0 16px rgba(245, 158, 11, 0.5);
+}
+
+.avatar-frame-sky {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #0ea5e9, 0 0 12px rgba(14, 165, 233, 0.4);
+}
+
+.avatar-frame-rose {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #f43f5e, 0 0 14px rgba(244, 63, 94, 0.45);
+}
+
+.avatar-frame-yellow {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #eab308, 0 0 14px rgba(234, 179, 8, 0.45);
+}
+
+.avatar-frame-teal {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #14b8a6, 0 0 10px rgba(20, 184, 166, 0.4);
+}
+
+.avatar-frame-orange {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #f97316, 0 0 14px rgba(249, 115, 22, 0.45);
+}
+
+.avatar-frame-indigo {
+  border-radius: 0.85rem;
+  box-shadow: 0 0 0 2.5px #6366f1, 0 0 14px rgba(99, 102, 241, 0.45);
+}
+
+/* ==========================================================================
+   OFFICIAL CERTIFICATE PRINT & PDF EXPORT OPTIMIZATIONS (A4 SPECIFICATION)
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0F172A !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* When printing certificate, completely suppress underlying application DOM tree */
+  body.certificate-modal-open #root {
+    display: none !important;
+  }
+
+  /* Hide web-specific UI, navigation, headers, footers, interactive toolbars, floating widgets, dialog backdrops, action buttons */
+  nav,
+  header,
+  footer,
+  aside,
+  button,
+  input,
+  select,
+  textarea,
+  .no-print,
+  .print\:hidden,
+  [data-floating],
+  [class*="backdrop"],
+  [role="tooltip"],
+  [class*="toast"],
+  [class*="notification"],
+  .fixed.inset-0.bg-slate-950\/80 {
+    display: none !important;
+  }
+
+  /* Reset fixed dialog wrapper so it renders as a pure unconstrained printable block without clipping */
+  [role="dialog"],
+  .fixed.inset-0.z-\[9999\] {
+    position: static !important;
+    inset: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Official Certificate single cohesive sheet strictly sized for standard A4 printable area (Gold-Navy-Ivory) */
+  .certificate-printable-sheet {
+    display: block !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 184mm !important;
+    min-height: 256mm !important;
+    max-height: 270mm !important;
+    margin: 0 auto !important;
+    padding: 10mm 12mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+    background-color: #FAF7F0 !important;
+    border: 2.5pt solid #B89748 !important;
+    outline: 1pt solid #D4AF37 !important;
+    outline-offset: -5pt !important;
+  }
+}

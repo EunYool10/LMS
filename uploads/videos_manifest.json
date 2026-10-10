@@ -1,0 +1,21 @@
+[
+  {
+    "video_id": "vid_1788791936236_4159877ab223",
+    "file_name": "vid_1788791936236_4159877ab223.mp4",
+    "video_url": "/api/videos/stream/vid_1788791936236_4159877ab223.mp4",
+    "file_size": 20,
+    "mime_type": "video/mp4",
+    "uploaded_at": "2026-10-03T14:10:19.281Z",
+    "status": "ready"
+  },
+  {
+    "file_size": 21763358,
+    "video_url": "/api/videos/stream/vid_1790606834854_7db3c8572261.mp4",
+    "file_name": "눈의꽃  - 박효신 ｜ Cover by GyuBin (규빈).mp4",
+    "status": "ready",
+    "video_id": "vid_1790606834854_7db3c8572261",
+    "duration_seconds": 352,
+    "uploaded_at": "2026-09-28T14:47:16.313Z",
+    "mime_type": "video/mp4"
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "name": "TDSNTLMS",
+  "description": "TDSNTLMS - TDS 본사 공식 사내 교육 및 직무 역량 개발 올인원 기업용 LMS 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

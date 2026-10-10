@@ -1,0 +1,262 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile, roles, and account status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user identifier" },
+        "name": { "type": "string", "description": "Display name or legal name" },
+        "nickname": { "type": "string", "description": "Optional nickname" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "role": { "type": "string", "enum": ["USER", "ADMIN", "SUPER_ADMIN", "INSTRUCTOR"], "description": "Access level role" },
+        "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED", "DELETED"], "description": "Account status" },
+        "avatar": { "type": "string", "description": "Avatar image URL or path" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "bio": { "type": "string", "description": "Biography or profile description" },
+        "kakaoId": { "type": "string", "description": "Kakao user unique ID" },
+        "naverId": { "type": "string", "description": "Naver user unique ID" },
+        "googleId": { "type": "string", "description": "Google user unique ID" },
+        "provider": { "type": "string", "description": "Auth provider (e.g. email, kakao, naver, google)" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role", "status"]
+    },
+    "LessonProgress": {
+      "title": "LessonProgress",
+      "description": "Student lesson learning progress and watch duration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique progress ID" },
+        "userId": { "type": "string", "description": "User ID" },
+        "courseId": { "type": "string", "description": "Course ID" },
+        "lessonId": { "type": "string", "description": "Lesson ID" },
+        "watchedSeconds": { "type": "number", "description": "Total seconds watched" },
+        "totalSeconds": { "type": "number", "description": "Total lesson video duration in seconds" },
+        "uniqueWatchedSeconds": { "type": "number", "description": "Unique non-overlapping seconds watched" },
+        "uniquePercent": { "type": "number", "description": "Unique watch percentage (0-100)" },
+        "isCompleted": { "type": "boolean", "description": "Whether lesson completion conditions met" },
+        "lastWatchedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "courseId", "lessonId", "isCompleted"]
+    },
+    "CourseEnrollment": {
+      "title": "CourseEnrollment",
+      "description": "User course enrollment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Enrollment ID" },
+        "userId": { "type": "string", "description": "User ID" },
+        "courseId": { "type": "string", "description": "Course ID" },
+        "enrolledAt": { "type": "string", "format": "date-time" },
+        "lastAccessedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "courseId", "enrolledAt"]
+    },
+    "CourseReview": {
+      "title": "CourseReview",
+      "description": "Student review and rating for a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "courseId", "userId", "userName", "rating", "comment", "createdAt"]
+    },
+    "CertificateRecord": {
+      "title": "CertificateRecord",
+      "description": "Official completion certificate issued to a student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "certificateNumber": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "instructorTitle": { "type": "string" },
+        "instructorSeal": { "type": "string" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "certificateNumber", "userId", "userName", "courseId", "courseTitle", "issuedAt"]
+    },
+    "VideoMetadata": {
+      "title": "VideoMetadata",
+      "description": "Uploaded video file metadata stored on server storage",
+      "type": "object",
+      "properties": {
+        "video_id": { "type": "string" },
+        "file_name": { "type": "string" },
+        "video_url": { "type": "string" },
+        "thumbnail_url": { "type": "string" },
+        "file_size": { "type": "number" },
+        "mime_type": { "type": "string" },
+        "duration_seconds": { "type": "number" },
+        "uploaded_at": { "type": "string", "format": "date-time" },
+        "uploaded_by": { "type": "string" },
+        "status": { "type": "string", "enum": ["ready", "processing", "uploading", "failed"] }
+      },
+      "required": ["video_id", "file_name", "video_url", "file_size", "mime_type", "uploaded_at", "status"]
+    },
+    "CourseRecord": {
+      "title": "CourseRecord",
+      "description": "LMS Course curriculum and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "categoryId", "instructorName", "isPublished"]
+    },
+    "CourseSectionRecord": {
+      "title": "CourseSectionRecord",
+      "description": "Course curriculum section",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "courseId", "title", "order"]
+    },
+    "LessonRecord": {
+      "title": "LessonRecord",
+      "description": "Course lesson item including video URL and duration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "sectionId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["video", "quiz", "exam", "doc"] },
+        "order": { "type": "number" },
+        "videoUrl": { "type": "string" },
+        "videoThumbnail": { "type": "string" },
+        "videoOriginalName": { "type": "string" },
+        "videoFileSize": { "type": "number" },
+        "durationSeconds": { "type": "number" },
+        "isFreePreview": { "type": "boolean" }
+      },
+      "required": ["id", "courseId", "sectionId", "title", "type", "order"]
+    },
+    "SystemAnnouncementRecord": {
+      "title": "SystemAnnouncementRecord",
+      "description": "System-wide global announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["normal", "important", "urgent"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "authorName": { "type": "string" },
+        "authorRole": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "isActive", "createdAt", "authorName", "authorRole"]
+    },
+    "CourseAnnouncementRecord": {
+      "title": "CourseAnnouncementRecord",
+      "description": "Course-specific announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "isPinned": { "type": "boolean" }
+      },
+      "required": ["id", "courseId", "title", "content", "authorName", "authorRole", "createdAt"]
+    },
+    "SystemSettingsRecord": {
+      "title": "SystemSettingsRecord",
+      "description": "Global LMS platform settings and banner status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "siteName": { "type": "string" },
+        "announcement": { "type": "string" },
+        "showAnnouncement": { "type": "boolean" },
+        "announcementUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "siteName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles and permissions"
+    },
+    "/progress/{progressId}": {
+      "schema": "LessonProgress",
+      "description": "User video and lesson learning progress records"
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": "CourseEnrollment",
+      "description": "Course enrollment relationships"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "CourseReview",
+      "description": "Student course reviews and ratings"
+    },
+    "/certificates/{certificateId}": {
+      "schema": "CertificateRecord",
+      "description": "Course completion certificates and verification records"
+    },
+    "/videos/{videoId}": {
+      "schema": "VideoMetadata",
+      "description": "Global uploaded videos metadata"
+    },
+    "/courses/{courseId}": {
+      "schema": "CourseRecord",
+      "description": "Persisted course documents"
+    },
+    "/sections/{sectionId}": {
+      "schema": "CourseSectionRecord",
+      "description": "Persisted course sections"
+    },
+    "/lessons/{lessonId}": {
+      "schema": "LessonRecord",
+      "description": "Persisted course lessons"
+    },
+    "/system_announcements/{announcementId}": {
+      "schema": "SystemAnnouncementRecord",
+      "description": "Persisted system-wide announcements"
+    },
+    "/course_announcements/{announcementId}": {
+      "schema": "CourseAnnouncementRecord",
+      "description": "Persisted course-specific announcements"
+    },
+    "/system_settings/{settingsId}": {
+      "schema": "SystemSettingsRecord",
+      "description": "Persisted platform configuration"
+    }
+  }
+}
