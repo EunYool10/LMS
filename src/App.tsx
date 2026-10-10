@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/common/Navbar';
@@ -15,6 +15,7 @@ import { LearnPage } from './pages/LearnPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AccountSettings } from './components/profile/AccountSettings';
 import { UserProfilePage } from './pages/UserProfilePage';
+import { LoginGatePage } from './pages/LoginGatePage';
 import { BackToTop } from './components/common/BackToTop';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
@@ -44,8 +45,27 @@ const AppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // After logout, the next person to sign in on this browser starts from home.
+  useEffect(() => {
+    if (!user) {
+      setCurrentView('home');
+      setViewParam(undefined);
+    }
+  }, [user]);
+
   const isAdminRoute = currentView.startsWith('admin-');
   const isLearnRoute = currentView === 'learn';
+
+  // Employees only: visitors who are not signed in see the sign-in page and nothing else.
+  if (!user) {
+    return (
+      <>
+        <LoginGatePage />
+        {isAuthModalOpen && <AuthModal onNavigate={handleNavigate} />}
+        <PolicyModal />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen min-h-screen-dvh flex flex-col bg-neutral-50 text-neutral-900 font-sans antialiased">
