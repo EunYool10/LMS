@@ -192,46 +192,9 @@ export const authApi = {
         'ayun24song@gmail.com',
       ];
 
+      // Admin accounts are only verified by the server; there is no offline admin sign-in.
       if (adminEmails.includes(cleanEmail)) {
-        if (rawPassword === 'STAFF0606' || rawPassword.trim() === 'STAFF0606') {
-          const names: Record<string, string> = {
-            'teamdevstudiont@gmail.com': 'TDSNTLMS',
-            'eunyool100208@gmail.com': '은율',
-            'deer123424@gmail.com': '은율',
-            'ayun24song@gmail.com': '윤아',
-          };
-          const isYuna = cleanEmail === 'ayun24song@gmail.com';
-          const isTDSNTLMS = cleanEmail === 'teamdevstudiont@gmail.com';
-          const adminIds: Record<string, string> = {
-            'teamdevstudiont@gmail.com': 'TDSNTLMS',
-            'eunyool100208@gmail.com': 'admin_EunYool',
-            'deer123424@gmail.com': 'admin_EunYool',
-            'ayun24song@gmail.com': 'admin_ayun24song',
-          };
-          const fallbackAdmin: User = {
-            id: adminIds[cleanEmail] || `admin_${cleanEmail.split('@')[0]}`,
-            name: names[cleanEmail] || '총괄관리자',
-            email: cleanEmail,
-            role: 'SUPER_ADMIN',
-            status: 'ACTIVE',
-            avatar: isYuna ? '/송윤아.png' : isTDSNTLMS ? '/images/tdsntlms_profile.png' : undefined,
-            createdAt: '2026-01-01T00:00:00.000Z',
-          };
-          const dummyToken = `tdsnt_jwt_sa_offline_${Date.now()}`;
-          this.setToken(dummyToken);
-
-          const existing = storage.getUserById(fallbackAdmin.id);
-          if (!existing) {
-            storage.createUser(fallbackAdmin);
-          }
-          return {
-            success: true,
-            user: fallbackAdmin,
-            token: dummyToken,
-          };
-        } else {
-          throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.');
-        }
+        throw new Error('로그인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
       }
 
       const users = storage.getUsers();

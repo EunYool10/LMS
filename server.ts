@@ -464,8 +464,15 @@ export const serverAuditLogs: Array<{
   timestamp: string;
 }> = [];
 
-// Initialize the allowed admin accounts with initial password hashed and salted on server
-const INITIAL_ADMIN_PW = process.env.INITIAL_ADMIN_PASSWORD || 'STAFF0606';
+// Initialize the allowed admin accounts with initial password hashed and salted on server.
+// The password must come from INITIAL_ADMIN_PASSWORD. Without it a random one is used, so admin
+// sign-in stays closed instead of falling back to a password anyone could read in the repository.
+const INITIAL_ADMIN_PW = (() => {
+  const fromEnv = (process.env.INITIAL_ADMIN_PASSWORD || '').trim();
+  if (fromEnv) return fromEnv;
+  console.warn('[Auth] INITIAL_ADMIN_PASSWORD is not set — admin sign-in is disabled until it is configured.');
+  return crypto.randomBytes(32).toString('hex');
+})();
 
 function initAdminAccounts() {
   const adminDefs = [
