@@ -18,7 +18,16 @@ import {
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
 import { isCloudStorageEnabled, uploadToCloud, deleteFromCloud } from './cloudStorage';
-import { DiscordCategory, DiscordMessage, isDiscordConfigured, sendDiscord, WindowCounter } from './discordNotifier';
+import {
+  DISCORD_MAX_IMAGE_BYTES,
+  DISCORD_MAX_IMAGES,
+  DiscordCategory,
+  DiscordImage,
+  DiscordMessage,
+  isDiscordConfigured,
+  sendDiscord,
+  WindowCounter,
+} from './discordNotifier';
 
 dotenv.config();
 
@@ -595,17 +604,76 @@ async function startServer() {
     return { userLabel, courseLabel };
   };
 
-  const ADMIN_ACTION_LABELS: Record<string, string> = {
-    UPDATE_ROLE: '권한 변경',
-    UPDATE_STATUS: '계정 상태 변경',
-    DELETE_USER: '사용자 삭제',
-    PASSWORD_CHANGE: '비밀번호 변경',
-    COURSE_DELETE: '강의 삭제',
-    BULK_DELETE: '일괄 삭제',
-    LEARNING_DATA_RESET: '학습 기록 초기화',
+  const ADMIN_ACTIONS: Record<string, { emoji: string; label: string }> = {
+    UPDATE_ROLE: { emoji: '🔑', label: '권한 변경' },
+    UPDATE_STATUS: { emoji: '⏸️', label: '계정 상태 변경' },
+    DELETE_USER: { emoji: '🗑️', label: '사용자 삭제' },
+    PASSWORD_CHANGE: { emoji: '🔒', label: '비밀번호 변경' },
+    COURSE_DELETE: { emoji: '🗑️', label: '강의 삭제' },
+    BULK_DELETE: { emoji: '🧹', label: '일괄 삭제' },
+    LEARNING_DATA_RESET: { emoji: '♻️', label: '학습 기록 초기화' },
   };
-  const SUSPICIOUS_LABELS: Record<string, string> = {
-    seek_skip: '아직 보지 않은 구간으로 건너뛰기를 반복 시도',
+  const INQUIRY_CATEGORY_LABELS: Record<string, string> = {
+    learning: '📖 강의 · 학습',
+    account: '🔑 계정 · 로그인',
+    certificate: '🏅 수료증',
+    bug: '🐞 오류 신고',
+    other: '💭 기타',
+  };
+
+  /**
+   * Builds the inquiry notice from the stored inquiry (not from what the browser sent) and
+   * reassembles its photos from the Firestore pieces so they appear in the Discord message.
+   */
+  const buildInquiryNotice = async (inquiryId: string): Promise<(DiscordMessage & { category: DiscordCategory }) | null> => {
+    const snap = await getDoc(doc(fbDb, 'system_settings', inquiryId));
+    const inq = snap.exists() ? (snap.data() as any) : null;
+    // Only fresh inquiries: the endpoint is public, so old ids cannot be replayed into the channel.
+    if (!inq || inq.kind !== 'inquiry' || Date.now() - Date.parse(inq.createdAt || '') > 15 * 60 * 1000) return null;
+
+    const attachments: { id: string; name: string; type: string; size: number; chunks: number }[] = Array.isArray(inq.attachments)
+      ? inq.attachments
+      : [];
+    const isPhoto = (a: { type: string }) => /^image\/(jpeg|png|gif|webp)$/.test(a.type || '');
+    const images: DiscordImage[] = [];
+    let total = 0;
+    for (const att of attachments.filter(isPhoto).slice(0, DISCORD_MAX_IMAGES)) {
+      if (total + (att.size || 0) > DISCORD_MAX_IMAGE_BYTES || !(att.chunks > 0) || att.chunks > 20) continue;
+      try {
+        const parts = await Promise.all(
+          Array.from({ length: att.chunks }, (_, i) => getDoc(doc(fbDb, 'system_settings', `inqfile_${att.id}_${i}`)))
+        );
+        if (parts.some((p) => !p.exists())) continue;
+        const data = Buffer.concat(parts.map((p) => Buffer.from(String((p.data() as any).data || ''), 'base64')));
+        const ext = att.type === 'image/png' ? 'png' : att.type === 'image/gif' ? 'gif' : att.type === 'image/webp' ? 'webp' : 'jpg';
+        images.push({ filename: `photo${images.length + 1}.${ext}`, data, contentType: att.type });
+        total += data.length;
+      } catch (err) {
+        console.warn('[Discord] could not load inquiry photo:', (err as Error)?.message);
+      }
+    }
+    const otherFiles = attachments.filter((a) => !isPhoto(a));
+    const photoCount = attachments.filter(isPhoto).length;
+
+    const sender = String(inq.userName || '-').slice(0, 60);
+    return {
+      category: 'inquiry',
+      title: '📩 새 문의가 도착했어요',
+      description: `**${String(inq.title || '').slice(0, 120)}**`,
+      fields: [
+        { name: '🏷️ 유형', value: INQUIRY_CATEGORY_LABELS[inq.category] || '💭 기타' },
+        { name: '👤 보낸 사람', value: inq.userId ? sender : `${sender} (비회원)` },
+        ...(attachments.length
+          ? [{ name: '📎 첨부', value: [photoCount ? `🖼️ 사진 ${photoCount}장` : '', otherFiles.length ? `📄 파일 ${otherFiles.length}개` : ''].filter(Boolean).join(' · ') }]
+          : []),
+        ...(otherFiles.length
+          ? [{ name: '📄 첨부 파일', value: otherFiles.map((a) => `• ${String(a.name).slice(0, 60)}`).join('\n'), inline: false }]
+          : []),
+      ],
+      images,
+      note: '관리자 콘솔 › 문의 관리에서 답변해 주세요',
+      dedupeKey: `inquiry:${inquiryId}`,
+    };
   };
 
   const notifyRate = new WindowCounter(5 * 60 * 1000);
@@ -630,65 +698,74 @@ async function startServer() {
       case 'enrollment':
         message = {
           category: 'enrollment',
-          title: '📚 수강 신청',
-          description: `**${v('userName')}**님이 「${v('courseTitle')}」 수강을 시작했습니다.`,
+          title: '🙋 새 수강 신청',
+          description: `**${v('userName')}**님이 새 강의를 듣기 시작했어요! 🚀`,
+          fields: [
+            { name: '👤 수강생', value: v('userName') },
+            { name: '📘 강의', value: v('courseTitle') },
+          ],
           dedupeKey: `enroll:${v('userId')}:${v('courseId')}`,
         };
         break;
       case 'assignment':
         message = {
           category: 'enrollment',
-          title: '🗂️ 수강 배정',
-          description: v('details', 300) || `${v('actorName')}님이 수강을 배정했습니다.`,
-          fields: [{ name: '관리자', value: v('actorName') }],
+          title: '🗂️ 수강 배정 완료',
+          description: `📌 ${v('details', 300) || '관리자가 수강을 배정했어요.'}`,
+          fields: [{ name: '🧑‍💼 관리자', value: v('actorName') }],
         };
         break;
       case 'completion':
         message = {
           category: 'completion',
-          title: '🎓 과정 수료',
-          description: `**${v('userName')}**님이 「${v('courseTitle')}」 과정을 수료했습니다.`,
+          title: '🎉 과정 수료!',
+          description: `**${v('userName')}**님이 과정을 끝까지 완주했어요 👏`,
+          fields: [
+            { name: '👤 수료생', value: v('userName') },
+            { name: '📘 과정', value: v('courseTitle') },
+          ],
+          note: '수료증 조회에서 발급 내역을 볼 수 있어요',
           dedupeKey: `complete:${v('userId')}:${v('courseId')}`,
         };
         break;
-      case 'inquiry':
-        message = {
-          category: 'inquiry',
-          title: '💬 새 문의',
-          description: `「${v('title', 100)}」\n관리자 콘솔 › 문의 관리에서 답변해 주세요.`,
-          fields: [
-            { name: '유형', value: v('categoryLabel') },
-            { name: '보낸 사람', value: v('userName') + (d.guest ? ' (비회원)' : '') },
-            ...(Number(d.attachments) > 0 ? [{ name: '첨부', value: `${Math.min(Number(d.attachments), 10)}개` }] : []),
-          ],
-          dedupeKey: `inquiry:${v('inquiryId')}`,
-        };
+      case 'inquiry': {
+        const inquiryId = v('inquiryId', 80);
+        if (!/^inquiry_[\w-]+$/.test(inquiryId)) return res.status(400).json({ sent: false, reason: 'bad_inquiry' });
+        if (!isDiscordConfigured()) return res.json({ sent: false, reason: 'not_configured' });
+        try {
+          message = await buildInquiryNotice(inquiryId);
+        } catch (err) {
+          console.warn('[Discord] inquiry lookup failed:', (err as Error)?.message);
+        }
+        if (!message) return res.status(404).json({ sent: false, reason: 'inquiry_not_found' });
         break;
+      }
       case 'admin_action': {
-        const label = ADMIN_ACTION_LABELS[v('action')];
-        if (!label) return res.status(400).json({ sent: false, reason: 'unknown_action' });
+        const action = ADMIN_ACTIONS[v('action')];
+        if (!action) return res.status(400).json({ sent: false, reason: 'unknown_action' });
         message = {
           category: 'security',
-          title: `🛡️ 관리 작업 · ${label}`,
-          description: v('details', 300),
-          fields: [{ name: '관리자', value: v('actorName') }],
+          title: `${action.emoji} 관리 작업 · ${action.label}`,
+          description: `📝 ${v('details', 300)}`,
+          fields: [{ name: '🧑‍💼 관리자', value: v('actorName') }],
+          note: '본인이 한 작업이 아니라면 바로 확인해 주세요',
         };
         break;
       }
       case 'suspicious': {
-        const label = SUSPICIOUS_LABELS[v('reason')];
-        if (!label) return res.status(400).json({ sent: false, reason: 'unknown_reason' });
+        if (v('reason') !== 'seek_skip') return res.status(400).json({ sent: false, reason: 'unknown_reason' });
         message = {
           category: 'security',
-          title: '⚠️ 이상 행동 감지',
-          description: label,
+          title: '⏩ 건너뛰기 반복 시도',
+          description: '⚠️ 아직 보지 않은 구간으로 영상을 넘기려는 시도가 반복됐어요.',
           fields: [
-            { name: '사용자', value: v('userName') },
-            { name: '강의', value: v('courseTitle') },
-            { name: '차시', value: v('lessonTitle') },
-            { name: '횟수', value: v('count') },
+            { name: '👤 사용자', value: v('userName') },
+            { name: '📘 강의', value: v('courseTitle') },
+            { name: '🎬 차시', value: v('lessonTitle') },
+            { name: '🔁 시도 횟수', value: `${v('count')}회` },
           ],
-          dedupeKey: `suspicious:${v('reason')}:${v('userId')}:${v('lessonId')}`,
+          note: '진도는 실제로 본 구간만 인정돼요',
+          dedupeKey: `suspicious:seek_skip:${v('userId')}:${v('lessonId')}`,
         };
         break;
       }
@@ -697,9 +774,12 @@ async function startServer() {
         if (notifyRate.hit(`test:${ip}`) > 5) return res.status(429).json({ sent: false, reason: 'rate_limited' });
         const sent = await sendDiscord({
           category: 'test',
-          title: '✅ 테스트 알림',
-          description: 'TDSNT LMS와 Discord 웹훅이 연결되었습니다. 앞으로 선택한 알림이 이 채널로 옵니다.',
-          fields: [{ name: '보낸 사람', value: v('actorName') || '-' }],
+          title: '✅ 연결 테스트',
+          description: '🎉 TDSNT LMS 알림이 이 채널과 잘 연결됐어요!\n앞으로 켜 둔 알림이 여기로 와요.',
+          fields: [
+            { name: '🙋 보낸 사람', value: v('actorName') || '-' },
+            { name: '🔔 알림 종류', value: '📚 수강 · 🎓 수료 · 💬 문의 · 🚨 보안', inline: false },
+          ],
         });
         return res.json({ sent, reason: sent ? undefined : 'webhook_error' });
       }
@@ -1630,11 +1710,13 @@ async function startServer() {
       if (adminAcc.status === 'suspended') {
         notifyDiscord({
           category: 'security',
-          title: '⚠️ 정지된 관리자 계정 로그인 시도',
+          title: '⛔ 정지된 관리자 계정 로그인 시도',
+          description: '🚫 이용이 정지된 관리자 계정으로 로그인하려는 시도가 있었어요.',
           fields: [
-            { name: '계정', value: cleanEmail },
-            { name: 'IP', value: clientIp(req) },
+            { name: '👤 계정', value: cleanEmail },
+            { name: '🌐 IP', value: clientIp(req) },
           ],
+          note: '로그인은 차단됐어요',
           dedupeKey: `suspended-login:${cleanEmail}:${Math.floor(Date.now() / 3_600_000)}`,
         }).catch(() => {});
         return res.status(403).json({ success: false, message: '이용이 정지된 관리자 계정입니다. 시스템 총괄자에게 문의하세요.' });
@@ -1649,12 +1731,14 @@ async function startServer() {
         if (failures === 5 || failures === 20) {
           notifyDiscord({
             category: 'security',
-            title: '⚠️ 관리자 로그인 실패 반복',
-            description: `15분 안에 비밀번호가 ${failures}번 틀렸습니다. 본인이 아니라면 비밀번호를 바꿔 주세요.`,
+            title: '🚫 관리자 로그인 실패 반복',
+            description: `🔐 15분 안에 비밀번호가 **${failures}번** 틀렸어요.`,
             fields: [
-              { name: '계정', value: cleanEmail },
-              { name: 'IP', value: clientIp(req) },
+              { name: '👤 계정', value: cleanEmail },
+              { name: '🌐 IP', value: clientIp(req) },
+              { name: '🔢 실패 횟수', value: `${failures}회` },
             ],
+            note: '본인이 아니라면 Render의 INITIAL_ADMIN_PASSWORD를 바꿔 주세요',
           }).catch(() => {});
         }
         return res.status(401).json({ success: false, message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
@@ -1678,11 +1762,12 @@ async function startServer() {
       notifyDiscord({
         category: 'security',
         title: '🔐 관리자 로그인',
-        description: '관리자 계정으로 로그인했습니다. 본인이 아니라면 바로 비밀번호를 바꿔 주세요.',
+        description: `👋 **${finalName}** 관리자 계정으로 로그인했어요.`,
         fields: [
-          { name: '계정', value: `${finalName} (${adminAcc.email})` },
-          { name: 'IP', value: clientIp(req) },
+          { name: '👤 계정', value: adminAcc.email },
+          { name: '🌐 IP', value: clientIp(req) },
         ],
+        note: '본인이 아니라면 바로 비밀번호를 바꿔 주세요',
         dedupeKey: `admin-login:${adminAcc.email}:${clientIp(req)}:${Math.floor(Date.now() / (6 * 3_600_000))}`,
       }).catch(() => {});
 
@@ -3216,14 +3301,15 @@ async function startServer() {
           .then(({ userLabel, courseLabel }) =>
             notifyDiscord({
               category: 'security',
-              title: '⚠️ 이상 행동 감지',
-              description: '정상 플레이어가 보내지 않는 시청 기록(진도 조작 의심)이 반복해서 들어왔습니다. 해당 기록은 진도에 반영되지 않았습니다.',
+              title: '🕵️ 진도 조작 의심',
+              description: '⚠️ 정상 플레이어가 보내지 않는 시청 기록이 반복해서 들어왔어요.',
               fields: [
-                { name: '사용자', value: userLabel },
-                { name: '강의', value: courseLabel },
-                { name: '차시 ID', value: String(lessonId) },
-                { name: 'IP', value: ip },
+                { name: '👤 사용자', value: userLabel },
+                { name: '📘 강의', value: courseLabel },
+                { name: '🎬 차시 ID', value: String(lessonId) },
+                { name: '🌐 IP', value: ip },
               ],
+              note: '조작된 기록은 진도에 반영되지 않았어요',
               dedupeKey: `forged-heartbeat:${sessionKey}`,
             })
           )
