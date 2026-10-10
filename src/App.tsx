@@ -96,8 +96,8 @@ const AppContent: React.FC = () => {
               <AdminSidebar currentView={currentView} onNavigate={handleNavigate} />
 
               {/* Admin Subpage Content */}
-              <main className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-safe-nav md:pb-8 overflow-y-auto min-w-0">
-                <div className="lms-container">
+              <main className="min-w-0 flex-1 px-4 py-6 pb-safe-nav sm:px-6 md:pb-10 lg:px-8">
+                <div className="mx-auto w-full max-w-[1280px]">
                   {currentView === 'admin-dashboard' && <AdminDashboardPage onNavigate={handleNavigate} />}
                   {currentView === 'admin-courses' && <AdminCoursesPage onNavigate={handleNavigate} />}
                   {currentView === 'admin-courses-create' && <AdminCourseEditorPage onNavigate={handleNavigate} />}
