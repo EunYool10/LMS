@@ -185,113 +185,114 @@
   }
 }
 
-/* ---------- Components ---------- */
+/* ---------- Components (layered so utilities can override) ---------- */
+@layer components {
+  .lms-container {
+    width: min(100% - 32px, 1200px);
+    margin-left: auto;
+    margin-right: auto;
+  }
 
-.lms-container {
-  width: min(100% - 32px, 1200px);
-  margin-left: auto;
-  margin-right: auto;
-}
+  .lms-card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
 
-.lms-card {
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2xl);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
+  .lms-card-interactive {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+  }
 
-.lms-card-interactive {
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2xl);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  cursor: pointer;
-}
+  .lms-card-interactive:hover {
+    border-color: var(--color-neutral-300);
+    box-shadow: var(--shadow-md);
+  }
 
-.lms-card-interactive:hover {
-  border-color: var(--color-neutral-300);
-  box-shadow: var(--shadow-md);
-}
+  .lms-input {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text);
+    background-color: var(--surface);
+    border: 1px solid var(--color-neutral-300);
+    border-radius: var(--radius-lg);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
 
-.lms-input {
-  width: 100%;
-  height: 2.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  color: var(--text);
-  background-color: var(--surface);
-  border: 1px solid var(--color-neutral-300);
-  border-radius: var(--radius-lg);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
+  .lms-input:focus {
+    outline: none;
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgb(29 104 224 / 0.12);
+  }
 
-.lms-input:focus {
-  outline: none;
-  border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px rgb(29 104 224 / 0.12);
-}
+  .lms-input::placeholder {
+    color: var(--color-neutral-400);
+  }
 
-.lms-input::placeholder {
-  color: var(--color-neutral-400);
-}
+  .lms-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    height: 2.5rem;
+    padding: 0 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: var(--radius-lg);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .lms-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .lms-btn-sm {
+    height: 2rem;
+    padding: 0 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .lms-btn-primary {
+    background: var(--color-brand-600);
+    color: #fff;
+  }
+  .lms-btn-primary:hover:not(:disabled) {
+    background: var(--color-brand-700);
+  }
+  .lms-btn-secondary {
+    background: var(--surface);
+    color: var(--color-neutral-800);
+    border: 1px solid var(--color-neutral-300);
+  }
+  .lms-btn-secondary:hover:not(:disabled) {
+    background: var(--color-neutral-50);
+  }
+  .lms-btn-ghost {
+    color: var(--color-neutral-700);
+  }
+  .lms-btn-ghost:hover:not(:disabled) {
+    background: var(--color-neutral-100);
+  }
 
-.lms-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  height: 2.5rem;
-  padding: 0 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border-radius: var(--radius-lg);
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.lms-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.lms-btn-sm {
-  height: 2rem;
-  padding: 0 0.75rem;
-  font-size: 0.8125rem;
-}
-.lms-btn-primary {
-  background: var(--color-brand-600);
-  color: #fff;
-}
-.lms-btn-primary:hover:not(:disabled) {
-  background: var(--color-brand-700);
-}
-.lms-btn-secondary {
-  background: var(--surface);
-  color: var(--color-neutral-800);
-  border: 1px solid var(--color-neutral-300);
-}
-.lms-btn-secondary:hover:not(:disabled) {
-  background: var(--color-neutral-50);
-}
-.lms-btn-ghost {
-  color: var(--color-neutral-700);
-}
-.lms-btn-ghost:hover:not(:disabled) {
-  background: var(--color-neutral-100);
-}
+  .lms-section-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-neutral-900);
+    letter-spacing: -0.025em;
+  }
 
-.lms-section-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--color-neutral-900);
-  letter-spacing: -0.025em;
-}
-
-.lms-eyebrow {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-brand-600);
-  letter-spacing: 0;
+  .lms-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-brand-600);
+    letter-spacing: 0;
+  }
 }
 
 /* Mobile Safe Area and Viewport Height */

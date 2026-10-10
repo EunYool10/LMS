@@ -5,6 +5,8 @@ import { useToast } from '../context/ToastContext';
 import { Badge } from '../components/common/Badge';
 import { ProgressBar } from '../components/common/ProgressBar';
 import {
+  BarChart3,
+  ChevronRight,
   Clock,
   BookOpen,
   Users,
@@ -41,6 +43,8 @@ import { Avatar } from '../components/common/Avatar';
 import { VerifiedBadge } from '../components/common/VerifiedBadge';
 import { UserProfilePreviewModal } from '../components/profile/UserProfilePreviewModal';
 import { AnnouncementDetailModal } from '../components/common/AnnouncementDetailModal';
+import { CourseCover } from '../components/common/CourseCover';
+import { resolveCategory } from '../components/common/CategoryIcon';
 
 interface CourseDetailPageProps {
   courseId: string;
@@ -137,19 +141,20 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId, on
   // Loading skeleton state
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse space-y-8">
-        <div className="h-6 w-32 bg-slate-200 rounded" />
-        <div className="bg-slate-900 rounded-3xl p-8 sm:p-12 space-y-4">
-          <div className="h-6 w-24 bg-slate-800 rounded-full" />
-          <div className="h-10 w-3/4 bg-slate-800 rounded" />
-          <div className="h-5 w-1/2 bg-slate-800 rounded" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl h-48 border border-slate-200 p-6" />
-            <div className="bg-white rounded-2xl h-64 border border-slate-200 p-6" />
+      <div className="animate-pulse">
+        <div className="border-b border-neutral-200 bg-white">
+          <div className="lms-container space-y-4 py-10">
+            <div className="h-4 w-32 rounded bg-neutral-200" />
+            <div className="h-8 w-2/3 rounded bg-neutral-200" />
+            <div className="h-4 w-1/2 rounded bg-neutral-100" />
           </div>
-          <div className="bg-white rounded-2xl h-80 border border-slate-200 p-6" />
+        </div>
+        <div className="lms-container grid gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-6">
+            <div className="h-40 rounded-xl border border-neutral-200 bg-white" />
+            <div className="h-64 rounded-xl border border-neutral-200 bg-white" />
+          </div>
+          <div className="h-96 rounded-xl border border-neutral-200 bg-white" />
         </div>
       </div>
     );
@@ -396,736 +401,452 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId, on
 
   const isEnrolled = !!enrollment;
   const progress = enrollment?.progressPercentage ?? 0;
+  const isCompleted = progress >= 100;
+  const categoryName = course.categoryName || resolveCategory(course.categoryId)?.name;
+  const hasDuration = (course.totalDurationSeconds && course.totalDurationSeconds > 0) || course.durationMinutes > 0;
+  const threshold = course.completionThresholdPercent || 80;
 
-  const hasValidThumbnail =
-    course.thumbnail &&
-    !thumbError &&
-    !course.thumbnail.includes('unsplash.com') &&
-    course.thumbnail.trim() !== '';
+  const openInstructor = () => {
+    if (!course.instructorId) return;
+    setPreviewUser({
+      userId: course.instructorId,
+      fallbackData: { name: course.instructorName || '강의 관리자', avatar: course.instructorAvatar, role: 'INSTRUCTOR' },
+    });
+  };
 
-  return (
-    <div className="lms-container py-6 sm:py-8 space-y-6 sm:space-y-8 min-w-0">
-      {/* Back Button & Action Toolbar */}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => onNavigate('home')}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>전체 강의 목록으로</span>
+  const courseNotices: CourseAnnouncement[] =
+    announcements.length > 0
+      ? announcements
+      : course.notice && course.notice.trim() !== ''
+      ? [
+          {
+            id: 'notice_fallback',
+            courseId: course.id,
+            title: `${course.title} 강의 공지사항`,
+            content: course.notice,
+            authorName: course.instructorName || 'TDSN 아카데미 교육운영팀',
+            authorRole: 'CONTENT_MANAGER',
+            createdAt: course.updatedAt || course.createdAt,
+          } as CourseAnnouncement,
+        ]
+      : [];
+
+  const sectionCard = 'rounded-xl border border-neutral-200 bg-white p-5 sm:p-6';
+
+  const enrollCard = (
+    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <button
+        type="button"
+        onClick={handleEnrollOrContinue}
+        className="group relative block w-full cursor-pointer"
+        aria-label={isEnrolled ? '이어서 학습하기' : '강의 시작하기'}
+      >
+        <CourseCover thumbnail={course.thumbnail} title={course.title} categoryId={course.categoryId} className="aspect-video w-full" />
+        <span className="absolute inset-0 flex items-center justify-center bg-neutral-950/0 opacity-0 transition group-hover:bg-neutral-950/25 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-brand-600 shadow-md transition-transform group-hover:scale-105">
+            <Play className="ml-0.5 h-5 w-5 fill-current" />
+          </span>
+        </span>
+      </button>
+      <div className="space-y-4 p-5">
+        {isEnrolled ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-neutral-600">{isCompleted ? '수료 완료' : '내 진도율'}</span>
+              <span className={`font-semibold tabular-nums ${isCompleted ? 'text-emerald-700' : 'text-brand-700'}`}>{progress}%</span>
+            </div>
+            <ProgressBar progress={progress} size="md" variant={isCompleted ? 'emerald' : 'indigo'} />
+          </div>
+        ) : (
+          <p className="text-[15px] font-semibold text-neutral-900">
+            {course.price > 0 ? `₩${course.price.toLocaleString()}` : '사내 임직원 무료 수강'}
+          </p>
+        )}
+        <button type="button" onClick={handleEnrollOrContinue} className="lms-btn lms-btn-primary h-11 w-full text-[15px]">
+          <PlayCircle className="h-5 w-5" />
+          {isCompleted ? '다시 학습하기' : isEnrolled ? '이어서 학습하기' : '수강 시작하기'}
         </button>
-
-        <div className="flex items-center gap-2">
-          {/* Wishlist Heart */}
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleWishlistToggle}
-            className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              isWishlisted
-                ? 'bg-rose-50 border-rose-200 text-rose-600'
-                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
-            }`}
+            aria-pressed={isWishlisted}
+            className={`lms-btn lms-btn-secondary lms-btn-sm ${isWishlisted ? 'border-rose-200 text-rose-600' : ''}`}
           >
-            <Heart className={`w-3.5 h-3.5 ${isWishlisted ? 'fill-rose-500 text-rose-500' : ''}`} />
-            <span>{isWishlisted ? '관심 해제' : '관심 담기'}</span>
+            <Heart className={`h-4 w-4 ${isWishlisted ? 'fill-rose-500 text-rose-500' : ''}`} />
+            {isWishlisted ? '관심 해제' : '관심 강의'}
           </button>
-
-          {/* Share */}
-          <button
-            type="button"
-            onClick={handleShare}
-            className="py-2 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copiedLink ? '링크 복사됨' : '공유하기'}</span>
+          <button type="button" onClick={handleShare} className="lms-btn lms-btn-secondary lms-btn-sm">
+            {copiedLink ? <Check className="h-4 w-4 text-emerald-600" /> : <Share2 className="h-4 w-4" />}
+            {copiedLink ? '복사됨' : '공유'}
           </button>
         </div>
+        <ul className="space-y-2.5 border-t border-neutral-100 pt-4 text-[13px] text-neutral-600">
+          <li className="flex items-center gap-2.5">
+            <BookOpen className="h-4 w-4 text-neutral-400" />총 {lessons.length}개 강의
+            {hasDuration && <span className="text-neutral-400">· {formatCourseTotalDuration(course.totalDurationSeconds, course.durationMinutes)}</span>}
+          </li>
+          <li className="flex items-center gap-2.5">
+            <CheckCircle2 className="h-4 w-4 text-neutral-400" />
+            영상 {threshold}% 이상 시청 시 학습 완료
+          </li>
+          <li className="flex items-center gap-2.5">
+            <Award className="h-4 w-4 text-neutral-400" />
+            과정 수료 시 수료증 발급
+          </li>
+        </ul>
       </div>
+    </div>
+  );
 
-      {/* Main Course Header Hero Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-0">
-        {/* Left Info Column */}
-        <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-between space-y-6">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {course.categoryName && <Badge variant="primary">{course.categoryName}</Badge>}
-              <Badge variant="neutral">난이도: {course.level}</Badge>
-              <span className="text-xs text-slate-400 font-medium">
-                등록일: {new Date(course.createdAt).toLocaleDateString('ko-KR')}
-              </span>
+  return (
+    <div className="min-w-0">
+      {/* ── Header band ── */}
+      <section className="border-b border-neutral-200 bg-white">
+        <div className="lms-container grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:py-10">
+          <div className="min-w-0 space-y-5">
+            <nav aria-label="경로" className="flex items-center gap-1 text-[13px] text-neutral-500">
+              <button type="button" onClick={() => onNavigate('home')} className="hover:text-neutral-900 cursor-pointer">
+                강의
+              </button>
+              {categoryName && (
+                <>
+                  <ChevronRight className="h-3.5 w-3.5 text-neutral-300" />
+                  <span>{categoryName}</span>
+                </>
+              )}
+            </nav>
+
+            <div className="space-y-3">
+              <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-[30px]">{course.title}</h1>
+              <p className="max-w-3xl text-[15px] leading-relaxed text-neutral-600">
+                {course.shortDescription || course.description || '등록된 강의 소개가 없습니다.'}
+              </p>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-              {course.title}
-            </h1>
-
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              {course.shortDescription || course.description || '등록된 상세 강의 소개가 없습니다.'}
-            </p>
-
-            {/* Metrics */}
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-slate-600 pt-2 border-t border-slate-100">
-              {reviewsCount > 0 && avgRating > 0 ? (
-                <div className="flex items-center gap-1 font-bold text-slate-900">
-                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  <span>{avgRating.toFixed(1)}</span>
-                  <span className="text-slate-400 font-normal">({reviewsCount}개 수강평)</span>
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-600">
+              <div className="flex items-center gap-1.5">
+                <dt className="sr-only">평점</dt>
+                {reviewsCount > 0 && avgRating > 0 ? (
+                  <dd className="flex items-center gap-1">
+                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    <span className="font-semibold text-neutral-900">{avgRating.toFixed(1)}</span>
+                    <span className="text-neutral-400">({reviewsCount})</span>
+                  </dd>
+                ) : (
+                  <dd className="text-neutral-400">평가 없음</dd>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <dt className="sr-only">난이도</dt>
+                <BarChart3 className="h-4 w-4 text-neutral-400" />
+                <dd>{course.level}</dd>
+              </div>
+              {hasDuration && (
+                <div className="flex items-center gap-1.5">
+                  <dt className="sr-only">총 학습 시간</dt>
+                  <Clock className="h-4 w-4 text-neutral-400" />
+                  <dd>{formatCourseTotalDuration(course.totalDurationSeconds, course.durationMinutes)}</dd>
                 </div>
-              ) : (
-                <span className="text-slate-400">평가 없음</span>
               )}
               <div className="flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-slate-400" />
-                <span>{enrollmentsCount.toLocaleString()}명 수강 중</span>
+                <dt className="sr-only">수강생</dt>
+                <Users className="h-4 w-4 text-neutral-400" />
+                <dd>{enrollmentsCount.toLocaleString()}명 수강</dd>
               </div>
-              {(course.totalDurationSeconds && course.totalDurationSeconds > 0) || course.durationMinutes > 0 ? (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  <span>총 {formatCourseTotalDuration(course.totalDurationSeconds, course.durationMinutes)}</span>
-                </div>
-              ) : null}
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 text-slate-400" />
-                <span>{lessons.length}개 강의</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Instructor profile snippet */}
-          <button
-            type="button"
-            onClick={() => {
-              if (course.instructorId) {
-                setPreviewUser({
-                  userId: course.instructorId,
-                  fallbackData: {
-                    name: course.instructorName || '강의 관리자',
-                    avatar: course.instructorAvatar,
-                    role: 'INSTRUCTOR',
-                  },
-                });
-              }
-            }}
-            className="flex items-center gap-3 pt-4 border-t border-slate-100 text-left w-full group cursor-pointer rounded-xl hover:bg-slate-50/80 -mx-1 px-1 transition-colors"
-            aria-label={`${course.instructorName || '강의 관리자'} 강사 프로필 미리보기`}
-          >
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0 group-hover:scale-105 transition-transform duration-200 shadow-2xs">
-              {course.instructorName ? course.instructorName.slice(0, 1) : '강'}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                  {course.instructorName || '강의 관리자'}
-                </span>
-                <VerifiedBadge role="INSTRUCTOR" size="xs" showLabel className="shrink-0" />
-              </div>
-              <div className="text-[11px] text-slate-500">TDSNTLMS 공식 인증 전문 강사진 · 프로필 보기</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Right Thumbnail & Action Box */}
-        <div className="lg:col-span-5 bg-slate-50 p-6 sm:p-8 border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between space-y-6">
-          <div
-            onClick={handleEnrollOrContinue}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleEnrollOrContinue();
-              }
-            }}
-            title={isEnrolled ? '이어서 학습 영상 시청하기' : '강의 영상 시청 시작하기'}
-            className="group relative aspect-video w-full rounded-2xl overflow-hidden shadow-sm bg-slate-900 cursor-pointer hover:shadow-xl transition-all border border-slate-800"
-          >
-            {hasValidThumbnail ? (
-              <img
-                src={course.thumbnail}
-                alt={course.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                onError={() => setThumbError(true)}
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex flex-col items-center justify-center p-6 text-center group-hover:scale-105 transition-transform duration-300">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 mb-2">
-                  <BookOpen className="w-7 h-7 stroke-[1.5]" />
-                </div>
-                <span className="text-sm font-bold text-slate-200 line-clamp-1 max-w-[85%]">
-                  {course.title || '강의 콘텐츠'}
-                </span>
-              </div>
-            )}
-
-            {/* Play Button Center Overlay on Hover / Always Interactive */}
-            <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/55 transition-colors flex flex-col items-center justify-center gap-2">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-2xl group-hover:scale-110 group-hover:bg-indigo-600 transition-all">
-                <Play className="w-7 h-7 sm:w-8 sm:h-8 translate-x-0.5 fill-current" />
-              </div>
-              <span className="text-xs font-bold text-white bg-slate-900/80 px-3 py-1 rounded-full backdrop-blur-xs border border-white/10 shadow-xs">
-                {isEnrolled ? '이어서 시청하기' : '영상 시청 시작하기'}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl sm:text-3xl font-black text-indigo-600">
-                {course.price > 0 ? `₩${course.price.toLocaleString()}` : '무료 수강'}
-              </span>
-              <span className="text-xs text-slate-500 font-medium">평생 무제한 수강</span>
-            </div>
-
-            {isEnrolled && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-600">내 학습 진도율</span>
-                  <span className="font-bold text-indigo-600 tabular-nums">{progress}%</span>
-                </div>
-                <ProgressBar progress={progress} size="md" variant={progress >= 100 ? 'emerald' : 'indigo'} />
-              </div>
-            )}
+            </dl>
 
             <button
               type="button"
-              onClick={handleEnrollOrContinue}
-              className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+              onClick={openInstructor}
+              className="flex items-center gap-3 rounded-lg text-left cursor-pointer group"
+              aria-label={`${course.instructorName || '강의 관리자'} 강사 프로필 보기`}
             >
-              <PlayCircle className="w-5 h-5" />
-              <span>{isEnrolled ? '학습 이어서 하기' : '지금 수강 신청하기'}</span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-50 text-sm font-semibold text-navy-700">
+                {course.instructorName ? course.instructorName.slice(0, 1) : '강'}
+              </span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-neutral-900 group-hover:text-brand-700">
+                  {course.instructorName || '강의 관리자'}
+                  <VerifiedBadge role="INSTRUCTOR" size="xs" className="shrink-0" />
+                </span>
+                <span className="block text-[13px] text-neutral-500">{course.instructorRole || '사내 강사'}</span>
+              </span>
             </button>
           </div>
+
+          {/* Mobile/tablet: the enroll card sits under the header. Desktop: it lives in the sticky column below. */}
+          <div className="lg:hidden">{enrollCard}</div>
         </div>
-      </div>
+      </section>
 
-      {/* Curriculum & Reviews Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column (8 cols): Curriculum List */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* Official Course Announcements & Notices Section */}
-          {announcements.length > 0 ? (
-            <div className="space-y-3">
-              {announcements.map((ann) => (
-                <div
+      {/* ── Body ── */}
+      <div className="lms-container grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12 lg:py-10">
+        <div className="min-w-0 space-y-6">
+          {courseNotices.length > 0 && (
+            <div className="space-y-2">
+              {courseNotices.map((ann) => (
+                <button
                   key={ann.id}
+                  type="button"
                   onClick={() => setSelectedAnnouncementForDetail(ann)}
-                  className={`bg-white rounded-2xl p-4 sm:p-5 border shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-start gap-3 sm:gap-4 ${
-                    ann.isPinned
-                      ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/40 via-white to-white'
-                      : 'border-slate-200/80 hover:border-indigo-200'
-                  }`}
+                  className="flex w-full items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left transition-colors hover:border-neutral-300 cursor-pointer"
                 >
-                  <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs mt-0.5 ${
-                      ann.isPinned ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'
-                    }`}
-                  >
-                    {ann.isPinned ? <Pin className="w-4 h-4" /> : <Megaphone className="w-4 h-4" />}
-                  </div>
-
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      {ann.isPinned ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] shrink-0">
-                          <Pin className="w-2.5 h-2.5" />
-                          <span>중요 공지</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] shrink-0 border border-indigo-100">
-                          <span>강의 공지</span>
-                        </span>
-                      )}
-
-                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                        {ann.title}
-                      </h4>
-
-                      <span aria-hidden="true" className="text-slate-300">·</span>
-
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(ann.createdAt).toLocaleDateString('ko-KR')}
-                      </span>
-
-                      <VerifiedBadge role={ann.authorRole} size="xs" showLabel className="shrink-0" />
-                    </div>
-
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                      {ann.content}
-                    </p>
-
-                    <div className="pt-1 flex items-center justify-end">
-                      <span className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1">
-                        <span>공지 전문 보기</span>
-                        <span>→</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  {ann.isPinned ? (
+                    <Pin className="h-4 w-4 shrink-0 text-amber-600" />
+                  ) : (
+                    <Megaphone className="h-4 w-4 shrink-0 text-brand-600" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-neutral-900">{ann.title}</span>
+                    <span className="block truncate text-[13px] text-neutral-500">{ann.content}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-neutral-400">{new Date(ann.createdAt).toLocaleDateString('ko-KR')}</span>
+                </button>
               ))}
             </div>
-          ) : course.notice && course.notice.trim() !== '' ? (
-            <div
-              onClick={() =>
-                setSelectedAnnouncementForDetail({
-                  id: 'notice_fallback',
-                  courseId: course.id,
-                  title: `${course.title} 강의 공지사항`,
-                  content: course.notice,
-                  authorName: course.instructorName || 'TDSN 아카데미 교육운영팀',
-                  authorRole: 'CONTENT_MANAGER',
-                  createdAt: new Date().toISOString(),
-                })
-              }
-              className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-start gap-3.5"
-            >
-              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
-                <Megaphone className="w-4 h-4" />
-              </div>
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-100 shrink-0">
-                    강의 공식 공지
-                  </span>
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                    {course.instructorName || 'TDSN 아카데미 교육운영팀'}
-                  </h4>
-                  <VerifiedBadge role="INSTRUCTOR" size="xs" showLabel className="shrink-0" />
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                  {course.notice}
-                </p>
-              </div>
-            </div>
-          ) : null}
+          )}
 
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                강의 커리큘럼 ({lessons.length}개 차시)
-              </h2>
-              <span className="text-xs text-slate-500">
-                {sections.length}개 섹션 • 총 {course.durationMinutes}분
+          {course.learningObjectives && course.learningObjectives.filter(Boolean).length > 0 && (
+            <section className={sectionCard}>
+              <h2 className="lms-section-title">이 과정에서 배우는 것</h2>
+              <ul className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                {course.learningObjectives.filter(Boolean).map((obj, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-neutral-700">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                    {obj}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {course.description && course.description !== course.shortDescription && (
+            <section className={sectionCard}>
+              <h2 className="lms-section-title">과정 소개</h2>
+              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-neutral-700">{course.description}</p>
+              {course.requirements && course.requirements.filter(Boolean).length > 0 && (
+                <div className="mt-5 border-t border-neutral-100 pt-5">
+                  <h3 className="text-sm font-semibold text-neutral-900">수강 전 준비</h3>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+                    {course.requirements.filter(Boolean).map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Curriculum */}
+          <section className={sectionCard}>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="lms-section-title">커리큘럼</h2>
+              <span className="text-[13px] text-neutral-500">
+                {sections.length}개 섹션 · {lessons.length}개 강의
               </span>
             </div>
 
             {sections.length === 0 && lessons.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p>등록된 차시가 없습니다.</p>
+              <div className="py-10 text-center text-sm text-neutral-400">
+                <BookOpen className="mx-auto mb-2 h-7 w-7 opacity-50" />
+                등록된 강의가 없습니다.
               </div>
             ) : (
-              <div className="space-y-3">
-                {sections.map((sec) => {
+              <div className="mt-4 divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200">
+                {sections.map((sec, sIdx) => {
                   const secLessons = lessons.filter((l) => l.sectionId === sec.id);
                   const isExpanded = !!expandedSections[sec.id];
-
                   return (
-                    <div key={sec.id} className="border border-slate-200 rounded-2xl overflow-hidden">
+                    <div key={sec.id}>
                       <button
                         type="button"
                         onClick={() => toggleSection(sec.id)}
-                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
+                        aria-expanded={isExpanded}
+                        className="flex w-full items-center gap-3 bg-neutral-50 px-4 py-3 text-left hover:bg-neutral-100 cursor-pointer"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900">{sec.title}</span>
-                          <span className="text-[11px] text-slate-400">({secLessons.length}강)</span>
-                        </div>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        <ChevronDown className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                        <span className="flex-1 text-sm font-semibold text-neutral-900">
+                          {sIdx + 1}. {sec.title}
+                        </span>
+                        <span className="text-xs text-neutral-500">{secLessons.length}강</span>
                       </button>
-
                       {isExpanded && (
-                        <div className="divide-y divide-slate-100 bg-white">
-                          {secLessons.map((l, lIdx) => {
-                            const isFree = l.isFreePreview;
-                            return (
-                              <div
-                                key={l.id}
-                                onClick={() => handleLessonClick(l.id, isFree)}
-                                className="p-3.5 hover:bg-slate-50 flex items-center justify-between gap-3 text-xs transition-colors cursor-pointer"
+                        <ul className="divide-y divide-neutral-100">
+                          {secLessons.map((l) => (
+                            <li key={l.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleLessonClick(l.id, l.isFreePreview)}
+                                className="group flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 cursor-pointer"
                               >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-[11px] shrink-0">
-                                    {lIdx + 1}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="font-semibold text-slate-800 truncate">{l.title}</div>
-                                    <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                                      <span>{formatDuration(l.durationSeconds, l.durationStatus)}</span>
-                                      {isFree && (
-                                        <span className="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded text-[10px]">
-                                          무료 체험
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="shrink-0">
-                                  <PlayCircle className="w-4.5 h-4.5 text-indigo-600 group-hover:scale-110 transition-transform" />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                                {l.type === 'quiz' || l.type === 'exam' ? (
+                                  <FileQuestion className="h-4 w-4 shrink-0 text-neutral-400" />
+                                ) : (
+                                  <PlayCircle className="h-4 w-4 shrink-0 text-neutral-400 group-hover:text-brand-600" />
+                                )}
+                                <span className="min-w-0 flex-1 truncate text-sm text-neutral-800 group-hover:text-neutral-900">{l.title}</span>
+                                {l.isFreePreview && !isEnrolled && (
+                                  <span className="shrink-0 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">미리보기</span>
+                                )}
+                                <span className="shrink-0 text-xs tabular-nums text-neutral-500">
+                                  {formatDuration(l.durationSeconds, l.durationStatus)}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
-        </div>
+          </section>
 
-        {/* Right Column (4 cols): Course Reviews & Feedback Form */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
-            {/* Review Section Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">수강평 및 리뷰</h3>
-                  <p className="text-[11px] text-slate-500">실제 수강생 분들의 생생한 평가</p>
-                </div>
-              </div>
-              <div className="text-right">
-                {reviewsCount > 0 && avgRating > 0 ? (
-                  <div className="flex items-center gap-1 font-black text-amber-500 text-sm">
-                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span>{avgRating.toFixed(1)}</span>
-                    <span className="text-[11px] text-slate-400 font-normal">/ 5.0</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-slate-400 font-medium">평가 없음</span>
-                )}
-              </div>
+          {/* Reviews */}
+          <section className={sectionCard} id="course-reviews">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="lms-section-title">수강평</h2>
+              <span className="text-[13px] text-neutral-500">{reviewsCount}개</span>
             </div>
 
-            {/* Accurate Rating Summary & Breakdown Scorecard */}
             {reviewsCount > 0 && (
-              <div className="p-4 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-slate-200/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl font-black text-slate-900 tracking-tight">
-                        {avgRating.toFixed(1)}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-400">/ 5.0</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-amber-400">
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const filled = star <= Math.round(avgRating);
-                        return (
-                          <Star
-                            key={star}
-                            className={`w-3.5 h-3.5 ${
-                              filled ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-medium">
-                      총 {reviewsCount}개의 솔직한 수강평 반영
-                    </p>
+              <div className="mt-4 flex flex-col gap-5 rounded-lg bg-neutral-50 p-4 sm:flex-row sm:items-center">
+                <div className="sm:w-36 sm:shrink-0">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold tabular-nums text-neutral-900">{avgRating.toFixed(1)}</span>
+                    <span className="text-sm text-neutral-400">/ 5</span>
                   </div>
-
-                  {/* Distribution Bars */}
-                  <div className="w-36 space-y-1 text-[10px]">
-                    {[5, 4, 3, 2, 1].map((star) => {
-                      const count = reviews.filter((r) => Math.round(r.rating) === star).length;
-                      const pct = reviewsCount > 0 ? Math.round((count / reviewsCount) * 100) : 0;
-                      return (
-                        <div key={star} className="flex items-center gap-1.5 text-slate-600">
-                          <span className="w-4 font-semibold text-right">{star}점</span>
-                          <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="w-5 text-right text-slate-400">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <div className="mt-1">{renderAccurateStars(avgRating, 'w-4 h-4')}</div>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  {[5, 4, 3, 2, 1].map((star) => {
+                    const count = reviews.filter((r) => Math.round(r.rating) === star).length;
+                    const pct = Math.round((count / reviewsCount) * 100);
+                    return (
+                      <div key={star} className="flex items-center gap-2 text-xs text-neutral-500">
+                        <span className="w-6 text-right tabular-nums">{star}점</span>
+                        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200">
+                          <span className="block h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="w-6 tabular-nums">{count}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Review Interaction Area: Duplicate-proof submission, Edit, or Login prompt */}
-            {!isAuthenticated || !user ? (
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-                  <MessageSquare className="w-4 h-4" />
+            <div className="mt-5">
+              {!isAuthenticated || !user ? (
+                <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-neutral-300 p-4 sm:flex-row sm:items-center">
+                  <p className="flex-1 text-sm text-neutral-600">로그인하면 이 강의에 대한 수강평을 남길 수 있어요.</p>
+                  <button type="button" onClick={() => openAuthModal('login')} className="lms-btn lms-btn-secondary lms-btn-sm">
+                    로그인
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">수강평을 남겨보세요</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    로그인하시면 강의에 대한 솔직한 평점과 후기를 등록할 수 있습니다.
-                  </p>
+              ) : myReview && !isEditingMyReview ? (
+                <div className="rounded-lg border border-brand-200 bg-brand-50/40 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-brand-700">내 수강평</span>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={handleStartEditReview} className="lms-btn lms-btn-ghost lms-btn-sm">
+                        <Edit3 className="h-3.5 w-3.5" />
+                        수정
+                      </button>
+                      <button type="button" onClick={handleDeleteReview} className="lms-btn lms-btn-ghost lms-btn-sm text-rose-600">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    {renderAccurateStars(myReview.rating)}
+                    <span className="text-sm font-semibold text-neutral-900">{myReview.rating.toFixed(1)}</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-neutral-700">{myReview.comment}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openAuthModal('login')}
-                  className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  로그인하고 수강평 남기기
-                </button>
-              </div>
-            ) : myReview && !isEditingMyReview ? (
-              /* User already reviewed: Show My Review Card to PREVENT DUPLICATES (중복 등록 원천 방지) */
-              <div className="p-4 bg-gradient-to-br from-indigo-50/50 via-white to-slate-50 rounded-2xl border-2 border-indigo-200/90 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                      <CheckCircle2 className="w-3 h-3 text-indigo-600" />
-                      내가 작성한 수강평 (등록 완료)
-                    </span>
+              ) : (
+                <form onSubmit={handleSaveReview} className="space-y-3 rounded-lg border border-neutral-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-neutral-900">{isEditingMyReview ? '수강평 수정' : '수강평 남기기'}</span>
+                    <span className="text-xs text-neutral-500">{getRatingDesc(hoverRating || reviewRating)?.title}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handleStartEditReview}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/70 rounded-lg transition-colors cursor-pointer"
-                      title="수강평 수정"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      <span>수정</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDeleteReview}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-100/70 rounded-lg transition-colors cursor-pointer"
-                      title="수강평 삭제"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>삭제</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    {renderAccurateStars(myReview.rating, 'w-3.5 h-3.5')}
-                    <span className="text-xs font-black text-slate-800">
-                      {myReview.rating.toFixed(1)}점
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      {getRatingDesc(myReview.rating)?.title.split(' ')[1] || ''}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-700 leading-relaxed bg-white/80 p-2.5 rounded-xl border border-slate-100">
-                    {myReview.comment}
-                  </p>
-
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-                    <span>
-                      작성일: {new Date(myReview.createdAt).toLocaleDateString('ko-KR')}
-                      {myReview.updatedAt && (
-                        <span className="text-indigo-600 font-medium ml-1.5">
-                          (수정됨: {new Date(myReview.updatedAt).toLocaleDateString('ko-KR')})
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-slate-400">강좌당 1건 제한</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* New Review Form OR Edit Review Form */
-              <form
-                onSubmit={handleSaveReview}
-                className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                      {isEditingMyReview ? (
-                        <>
-                          <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>내 수강평 수정</span>
-                        </>
-                      ) : (
-                        <>
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                          <span>수강평 남기기</span>
-                        </>
-                      )}
-                    </h4>
-                    <p className="text-[11px] text-slate-500">
-                      {isEditingMyReview
-                        ? '수정한 내용은 강의 전체 평점에 즉시 반영됩니다.'
-                        : '강좌당 1회만 등록 가능하며, 언제든 수정 및 삭제할 수 있습니다.'}
-                    </p>
-                  </div>
-                  {isEditingMyReview && (
-                    <button
-                      type="button"
-                      onClick={handleCancelEditReview}
-                      className="text-[11px] text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
-                    >
-                      취소
-                    </button>
-                  )}
-                </div>
-
-                {/* Accurate Interactive Star Selector with 0.5 Step & Quick Preset Chips */}
-                <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-700">별점 선택 (0.5 단위 지원)</span>
-                    <span className="text-xs font-black text-amber-600">
-                      {(hoverRating || reviewRating).toFixed(1)}점 / 5.0
-                    </span>
-                  </div>
-
-                  {/* Half-Star Clickable & Hoverable Stars */}
-                  <div className="flex items-center gap-1 py-1">
+                  <div className="flex items-center gap-0.5" role="radiogroup" aria-label="별점">
                     {[1, 2, 3, 4, 5].map((starIndex) => {
                       const currentVal = hoverRating || reviewRating;
                       const isFull = currentVal >= starIndex;
                       const isHalf = !isFull && currentVal >= starIndex - 0.5;
-
                       return (
-                        <div
-                          key={`selector-star-${starIndex}`}
-                          className="relative inline-block select-none"
-                        >
-                          {/* Left-half touch/click target (0.5) */}
+                        <div key={starIndex} className="relative inline-block select-none">
                           <button
                             type="button"
                             onMouseEnter={() => setHoverRating(starIndex - 0.5)}
                             onMouseLeave={() => setHoverRating(0)}
                             onClick={() => setReviewRating(starIndex - 0.5)}
-                            className="absolute left-0 top-0 w-1/2 h-full z-10 cursor-pointer focus:outline-none"
-                            title={`${starIndex - 0.5}점 선택`}
+                            className="absolute left-0 top-0 z-10 h-full w-1/2 cursor-pointer"
+                            aria-label={`${starIndex - 0.5}점`}
                           />
-                          {/* Right-half touch/click target (1.0) */}
                           <button
                             type="button"
                             onMouseEnter={() => setHoverRating(starIndex)}
                             onMouseLeave={() => setHoverRating(0)}
                             onClick={() => setReviewRating(starIndex)}
-                            className="absolute right-0 top-0 w-1/2 h-full z-10 cursor-pointer focus:outline-none"
-                            title={`${starIndex}점 선택`}
+                            className="absolute right-0 top-0 z-10 h-full w-1/2 cursor-pointer"
+                            aria-label={`${starIndex}점`}
                           />
-
-                          {/* Visual Star */}
-                          <div className="p-1 pointer-events-none">
+                          <div className="pointer-events-none p-0.5">
                             {isFull ? (
-                              <Star className="w-6 h-6 fill-amber-400 text-amber-400" />
+                              <Star className="h-6 w-6 fill-amber-400 text-amber-400" />
                             ) : isHalf ? (
-                              <div className="relative w-6 h-6">
-                                <Star className="w-6 h-6 text-slate-200" />
-                                <div className="absolute inset-0 overflow-hidden w-1/2">
-                                  <Star className="w-6 h-6 fill-amber-400 text-amber-400" />
+                              <div className="relative h-6 w-6">
+                                <Star className="h-6 w-6 text-neutral-200" />
+                                <div className="absolute inset-0 w-1/2 overflow-hidden">
+                                  <Star className="h-6 w-6 fill-amber-400 text-amber-400" />
                                 </div>
                               </div>
                             ) : (
-                              <Star className="w-6 h-6 text-slate-200" />
+                              <Star className="h-6 w-6 text-neutral-200" />
                             )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
-
-                  {/* Quick Preset Rating Chips */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    {[5.0, 4.5, 4.0, 3.5, 3.0, 2.5, 2.0, 1.0].map((score) => {
-                      const isSelected = (hoverRating || reviewRating) === score;
-                      return (
-                        <button
-                          key={`rating-preset-${score}`}
-                          type="button"
-                          onClick={() => setReviewRating(score)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-500 text-white shadow-xs scale-105'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          {score.toFixed(1)}점
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Rating Description Banner */}
-                  <p className="text-[11px] text-indigo-700 font-semibold bg-indigo-50/70 px-2.5 py-1.5 rounded-lg border border-indigo-100">
-                    {getRatingDesc(hoverRating || reviewRating)?.title} —{' '}
-                    <span className="font-normal text-slate-600">
-                      {getRatingDesc(hoverRating || reviewRating)?.desc}
-                    </span>
-                  </p>
-                </div>
-
-                {/* Comment Textarea with Character Counter */}
-                <div className="space-y-1">
                   <textarea
                     rows={3}
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
-                    placeholder="강의 내용, 구성, 실습 유익함 등 솔직한 수강평을 남겨주세요 (최소 5자 이상)..."
-                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                    maxLength={1000}
+                    placeholder="강의 내용과 구성, 실무 도움 정도를 알려주세요. (5자 이상)"
+                    className="lms-input h-auto resize-none py-2.5 leading-relaxed"
                   />
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
-                    <span>최소 5자 이상 작성 필수</span>
-                    <span
-                      className={
-                        reviewComment.trim().length >= 5 ? 'text-indigo-600 font-bold' : 'text-slate-400'
-                      }
-                    >
-                      {reviewComment.trim().length} / 1,000자
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs tabular-nums text-neutral-400">{reviewComment.trim().length} / 1,000</span>
+                    <div className="flex gap-2">
+                      {isEditingMyReview && (
+                        <button type="button" onClick={handleCancelEditReview} className="lms-btn lms-btn-secondary lms-btn-sm">
+                          취소
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={reviewComment.trim().length < 5 || isSubmittingReview}
+                        className="lms-btn lms-btn-primary lms-btn-sm"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        {isSubmittingReview ? '저장 중…' : isEditingMyReview ? '수정 저장' : '등록'}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </form>
+              )}
+            </div>
 
-                {/* Form Buttons */}
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  {isEditingMyReview && (
-                    <button
-                      type="button"
-                      onClick={handleCancelEditReview}
-                      className="py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-                    >
-                      취소
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={reviewComment.trim().length < 5 || isSubmittingReview}
-                    className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>
-                      {isSubmittingReview
-                        ? '저장 중...'
-                        : isEditingMyReview
-                        ? '수정 내용 저장'
-                        : '수강평 등록'}
-                    </span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Reviews List */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-0.5">
-                <span>전체 수강평 ({reviews.length})</span>
-                <span className="text-[11px] text-slate-400 font-normal">최신순 정렬</span>
-              </div>
-
+            <ul className="mt-5 divide-y divide-neutral-100">
               {reviews.length === 0 ? (
-                <div className="text-center py-8 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 space-y-1.5">
-                  <p className="text-xs font-semibold text-slate-600">아직 등록된 수강평이 없습니다.</p>
-                  <p className="text-[11px] text-slate-400">첫 번째 수강평의 주인공이 되어보세요!</p>
-                </div>
+                <li className="py-8 text-center text-sm text-neutral-500">아직 수강평이 없습니다. 첫 수강평을 남겨 주세요.</li>
               ) : (
                 reviews.map((rev) => {
                   const authorUser = rev.userId ? storage.getUser(rev.userId) : null;
@@ -1133,109 +854,54 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId, on
                   const role =
                     rev.userRole ||
                     authorUser?.role ||
-                    (rev.userName.includes('운영') ||
-                    rev.userName.includes('관리자') ||
-                    rev.userName.includes('TDSN')
+                    (rev.userName.includes('운영') || rev.userName.includes('관리자') || rev.userName.includes('TDSN')
                       ? 'SUPER_ADMIN'
                       : rev.userName.includes('강사')
                       ? 'INSTRUCTOR'
                       : undefined);
-                  const isVerified =
-                    role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'INSTRUCTOR';
-
+                  const isVerified = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'INSTRUCTOR';
                   return (
-                    <div
-                      key={rev.id}
-                      className={`p-3.5 rounded-xl border text-xs space-y-2 transition-all ${
-                        isMe
-                          ? 'bg-indigo-50/40 border-indigo-200'
-                          : isVerified
-                          ? 'bg-gradient-to-r from-indigo-50/90 via-sky-50/60 to-slate-50 border-indigo-200/80 shadow-2xs'
-                          : 'bg-slate-50/70 border-slate-100'
-                      }`}
-                    >
+                    <li key={rev.id} className="py-4 first:pt-0 last:pb-0">
                       <div className="flex items-center justify-between gap-2">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={() =>
                             setPreviewUser({
                               userId: rev.userId || '',
-                              fallbackData: {
-                                name: rev.userName,
-                                avatar: rev.userAvatar,
-                                role: role as UserRole,
-                                nickname: authorUser?.nickname,
-                              },
-                            });
-                          }}
-                          className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap group text-left cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg p-0.5 -m-0.5 transition-colors"
-                          aria-label={`${rev.userName} 프로필 요약 보기`}
+                              fallbackData: { name: rev.userName, avatar: rev.userAvatar, role: role as UserRole, nickname: authorUser?.nickname },
+                            })
+                          }
+                          className="flex min-w-0 items-center gap-2 rounded-md text-left cursor-pointer group"
+                          aria-label={`${rev.userName} 프로필 보기`}
                         >
-                          <div className="transition-transform duration-200 group-hover:scale-105 shrink-0">
-                            <Avatar
-                              user={authorUser}
-                              name={rev.userName}
-                              src={rev.userAvatar}
-                              size="xs"
-                              showVerifiedBadge
-                            />
-                          </div>
-                          <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[120px] sm:max-w-[160px]">
-                            {rev.userName}
-                          </span>
-                          {authorUser?.nickname && (
-                            <span className="text-[10px] text-slate-400 font-mono hidden sm:inline group-hover:text-indigo-500 transition-colors">
-                              {authorUser.nickname}
-                            </span>
-                          )}
-                          {isMe && (
-                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/90 px-1.5 py-0.5 rounded">
-                              내 수강평
-                            </span>
-                          )}
-                          {isVerified && (
-                            <VerifiedBadge role={role} size="xs" showLabel className="shrink-0" />
-                          )}
+                          <Avatar user={authorUser} name={rev.userName} src={rev.userAvatar} size="xs" showVerifiedBadge={false} />
+                          <span className="truncate text-sm font-medium text-neutral-900 group-hover:text-brand-700">{rev.userName}</span>
+                          {isVerified && <VerifiedBadge role={role} size="xs" className="shrink-0" />}
+                          {isMe && <span className="text-xs text-brand-700">나</span>}
                         </button>
-                        <div className="flex items-center gap-1.5 text-amber-500 shrink-0">
-                          <span className="text-[11px] font-black text-amber-600 mr-0.5">
-                            {rev.rating.toFixed(1)}
-                          </span>
-                          {renderAccurateStars(rev.rating, 'w-3 h-3')}
-                        </div>
-                      </div>
-
-                      <p className="text-slate-700 leading-relaxed pl-8 whitespace-pre-line">
-                        {rev.comment}
-                      </p>
-
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 pl-8">
-                        <span>
+                        <span className="text-xs text-neutral-400">
                           {new Date(rev.createdAt).toLocaleDateString('ko-KR')}
-                          {rev.updatedAt && (
-                            <span className="text-slate-500 ml-1.5">(수정됨)</span>
-                          )}
+                          {rev.updatedAt && ' (수정됨)'}
                         </span>
-                        {isMe && !isEditingMyReview && (
-                          <button
-                            type="button"
-                            onClick={handleStartEditReview}
-                            className="text-indigo-600 hover:underline font-semibold cursor-pointer"
-                          >
-                            수정하기
-                          </button>
-                        )}
                       </div>
-                    </div>
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        {renderAccurateStars(rev.rating, 'w-3.5 h-3.5')}
+                        <span className="text-xs font-semibold tabular-nums text-neutral-700">{rev.rating.toFixed(1)}</span>
+                      </div>
+                      <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-neutral-700">{rev.comment}</p>
+                    </li>
                   );
                 })
               )}
-            </div>
-          </div>
+            </ul>
+          </section>
         </div>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-[calc(var(--header-height)+24px)]">{enrollCard}</div>
+        </aside>
       </div>
 
-      {/* User Profile Preview Modal */}
       <UserProfilePreviewModal
         userId={previewUser?.userId || null}
         fallbackData={previewUser?.fallbackData}
@@ -1244,7 +910,6 @@ export const CourseDetailPage: React.FC<CourseDetailPageProps> = ({ courseId, on
         onNavigate={onNavigate}
       />
 
-      {/* Course Announcement Detail Modal */}
       <AnnouncementDetailModal
         isOpen={Boolean(selectedAnnouncementForDetail)}
         onClose={() => setSelectedAnnouncementForDetail(null)}
