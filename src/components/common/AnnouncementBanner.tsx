@@ -188,17 +188,19 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
       // Admin placeholder allowing quick announcement creation
       return (
         <>
-          <div
-            className={`flex items-center justify-between gap-3 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-3 ${className}`}
-          >
-            <div className="flex min-w-0 items-center gap-2.5 text-[13px] text-neutral-600">
-              <Megaphone className="w-4 h-4 shrink-0 text-neutral-400" />
-              <span className="truncate">게시 중인 전사 공지가 없습니다. 홈 상단에 노출할 공지를 등록할 수 있어요.</span>
+          <div className={`border-b border-neutral-200 bg-neutral-50 ${className}`}>
+            <div className="lms-container flex h-10 items-center gap-3 text-[13px] text-neutral-500">
+              <Megaphone className="h-4 w-4 shrink-0 text-neutral-400" />
+              <span className="min-w-0 flex-1 truncate">게시 중인 전사 공지가 없습니다.</span>
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="inline-flex shrink-0 items-center gap-1 font-medium text-neutral-700 hover:text-neutral-900 cursor-pointer"
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+                공지 등록
+              </button>
             </div>
-            <button type="button" onClick={handleOpenEdit} className="lms-btn lms-btn-secondary lms-btn-sm shrink-0">
-              <Edit3 className="w-3.5 h-3.5" />
-              공지 등록
-            </button>
           </div>
 
           {isEditModalOpen && renderModal()}
@@ -212,10 +214,10 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
   const priority = activeAnnouncement?.priority || 'important';
   const theme =
     priority === 'urgent'
-      ? { dot: 'bg-rose-500', label: '긴급', text: 'text-rose-700' }
+      ? { strip: 'bg-rose-50 border-rose-100', pill: 'bg-rose-600 text-white', label: '긴급' }
       : priority === 'important'
-      ? { dot: 'bg-amber-500', label: '중요', text: 'text-amber-700' }
-      : { dot: 'bg-brand-500', label: '공지', text: 'text-brand-700' };
+      ? { strip: 'bg-amber-50 border-amber-100', pill: 'bg-amber-500 text-white', label: '중요' }
+      : { strip: 'bg-brand-50 border-brand-100', pill: 'bg-brand-600 text-white', label: '공지' };
 
   function renderModal() {
     if (typeof document === 'undefined') return null;
@@ -428,45 +430,39 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
 
   return (
     <>
-      <aside
-        aria-label="사내 공지사항"
-        onClick={handleOpenDetail}
-        className={`group flex cursor-pointer select-none items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 transition-colors hover:border-neutral-300 ${className}`}
-      >
-        <span className={`inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ${theme.text}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
-          {theme.label}
-        </span>
-        <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2">
-          <h4 className="truncate text-sm font-semibold text-neutral-900">{activeAnnouncement.title}</h4>
-          <p className="truncate text-[13px] text-neutral-500 md:flex-1">{activeAnnouncement.content}</p>
-        </div>
-        <span className="hidden shrink-0 items-center text-[13px] font-medium text-neutral-500 group-hover:text-neutral-900 sm:inline-flex">
-          자세히 <ChevronRight className="w-4 h-4" />
-        </span>
-        {isAdmin && (
+      <aside aria-label="사내 공지사항" className={`border-b ${theme.strip} ${className}`}>
+        <div className="lms-container flex h-11 items-center gap-3">
           <button
             type="button"
-            onClick={handleOpenEdit}
-            className="shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 cursor-pointer"
-            title="공지 수정"
-            aria-label="공지 수정"
+            onClick={handleOpenDetail}
+            className="group flex min-w-0 flex-1 items-center gap-2.5 text-left cursor-pointer"
           >
-            <Edit3 className="w-4 h-4" />
+            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${theme.pill}`}>{theme.label}</span>
+            <span className="truncate text-sm font-medium text-neutral-900 group-hover:underline">{activeAnnouncement.title}</span>
+            <span className="hidden min-w-0 flex-1 truncate text-[13px] text-neutral-500 lg:block">{activeAnnouncement.content}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsDismissed(true);
-          }}
-          className="shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 cursor-pointer"
-          title="공지 닫기"
-          aria-label="공지 닫기"
-        >
-          <X className="w-4 h-4" />
-        </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleOpenEdit}
+              className="shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-black/5 hover:text-neutral-800 cursor-pointer"
+              title="공지 수정"
+              aria-label="공지 수정"
+            >
+              <Edit3 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsDismissed(true)}
+            className="shrink-0 rounded-md p-1.5 text-neutral-500 hover:bg-black/5 hover:text-neutral-800 cursor-pointer"
+            title="공지 닫기"
+            aria-label="공지 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </aside>
 
       {/* Admin Edit Modal */}

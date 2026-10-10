@@ -3,13 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../services/storage';
 import { Avatar } from '../common/Avatar';
 import { useToast } from '../../context/ToastContext';
-import { getProfileDecoration, PROFILE_DECORATIONS } from '../../utils/profileDecorations';
 import { getRoleLabel, getRoleMetadata } from '../../utils/rbac';
-import { AchievementBadge, CustomFrameConfig } from '../../types';
-import { MedallionBadge } from './MedallionBadge';
-import { AdminFrameEditor } from './AdminFrameEditor';
-import { BadgeTitleModal } from './BadgeTitleModal';
-import { AchievementInsignia } from './AchievementInsignia';
 import {
   User as UserIcon,
   Shield,
@@ -39,14 +33,12 @@ interface AccountSettingsProps {
 }
 
 export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCourse }) => {
-  const { user, updateProfile, updateAvatar, equipAchievement, isSuperAdmin, isServiceOwner, isAdmin } = useAuth();
+  const { user, updateProfile, updateAvatar, isSuperAdmin, isServiceOwner, isAdmin } = useAuth();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'decorations' | 'security' | 'stats'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'stats'>('profile');
 
-  // Filter for decorations tab
-  const [decorationFilter, setDecorationFilter] = useState<'all' | 'earned' | 'locked' | 'admin'>('all');
 
   // Profile form state
   const [name, setName] = useState(user?.name || '');
@@ -63,27 +55,9 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Decoration preview state (selected decoration before applying)
-  const [previewDecorationId, setPreviewDecorationId] = useState<string | null>(
-    user?.equippedAchievementId ?? null
-  );
-  const [isApplyingDecoration, setIsApplyingDecoration] = useState(false);
-
-  // Badge title editing modal state
-  const [editingBadge, setEditingBadge] = useState<AchievementBadge | null>(null);
-
-  // Custom frames
-  const [customFrames, setCustomFrames] = useState<CustomFrameConfig[]>(() => {
-    return storage.getCustomFrames();
-  });
-
-  // Badge list version tracker to trigger re-renders upon rename
-  const [badgeVersion, setBadgeVersion] = useState(0);
-
   // Keep preview in sync with current user equipped badge on initial load or user change
   useEffect(() => {
     if (user) {
-      setPreviewDecorationId(user.equippedAchievementId ?? null);
       setName(user.name || '');
       setNickname(user.nickname || '');
       setPhone(user.phone || '');
@@ -98,52 +72,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
     return storage.getUserLearningStats(user.id);
   }, [user]);
 
-  // Real badges belonging to this user (excluding removed badges per UI/UX specification)
-  const userBadges = useMemo(() => {
-    if (!user) return [];
-    return storage
-      .getUserBadges(user.id)
-      .filter((b) => b.id !== 'badge_admin_system' && b.id !== 'badge_admin_security');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, badgeVersion]);
-
-  // Current actually equipped badge
-  const currentEquippedBadge = useMemo(() => {
-    if (!user?.equippedAchievementId) return null;
-    return userBadges.find((b) => b.id === user.equippedAchievementId) ?? null;
-  }, [user?.equippedAchievementId, userBadges]);
-
-  // Preview decoration metadata
-  const previewDecoration = useMemo(() => {
-    return getProfileDecoration(previewDecorationId, user?.role, customFrames);
-  }, [previewDecorationId, user?.role, customFrames]);
-
-  // Currently saved decoration metadata
-  const currentSavedDecoration = useMemo(() => {
-    return getProfileDecoration(user?.equippedAchievementId, user?.role, customFrames);
-  }, [user?.equippedAchievementId, user?.role, customFrames]);
-
-  // Categorize badges for decoration selector
-  const standardBadges = useMemo(() => {
-    return userBadges.filter((b) => !b.isAdminOnly);
-  }, [userBadges]);
-
-  const adminBadges = useMemo(() => {
-    return userBadges.filter((b) => !!b.isAdminOnly);
-  }, [userBadges]);
-
-  // Filtered badges based on active filter
-  const filteredBadges = useMemo(() => {
-    let list = userBadges;
-    if (decorationFilter === 'earned') {
-      list = userBadges.filter((b) => (isAdmin ? true : (b.unlocked || b.earned)));
-    } else if (decorationFilter === 'locked') {
-      list = isAdmin ? [] : userBadges.filter((b) => !b.unlocked && !b.earned);
-    } else if (decorationFilter === 'admin') {
-      list = userBadges.filter((b) => b.isAdminOnly);
-    }
-    return list;
-  }, [userBadges, decorationFilter, isAdmin]);
 
   if (!user) {
     return (
@@ -255,57 +183,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
     }
   };
 
-  // Handle Decoration Selection (Preview only)
-  const handleSelectDecoration = (badgeId: string | null, isEarned: boolean, isAdminOnly: boolean) => {
-    if (badgeId === null) {
-      // Default (None) is always selectable
-      setPreviewDecorationId(null);
-      return;
-    }
-
-    // Admins auto-earn all badges
-    if (!isEarned && !isAdmin) {
-      showToast('아직 획득하지 않은 업적은 장식으로 선택할 수 없습니다.', 'warning', '미획득 업적');
-      return;
-    }
-
-    if (isAdminOnly && !isAdmin) {
-      showToast('관리자 전용 업적은 관리자 권한 계정만 사용할 수 있습니다.', 'error', '권한 제한');
-      return;
-    }
-
-    setPreviewDecorationId(badgeId);
-  };
-
-  // Handle Decoration Apply (Save to backend/storage)
-  const handleApplyDecoration = async () => {
-    setIsApplyingDecoration(true);
-    try {
-      await equipAchievement(previewDecorationId ?? 'none');
-    } finally {
-      setIsApplyingDecoration(false);
-    }
-  };
-
-  const hasDecorationChanges = previewDecorationId !== (user.equippedAchievementId ?? null);
-
-  const handleFrameSaved = async (frame: CustomFrameConfig) => {
-    const updated = storage.getCustomFrames();
-    setCustomFrames(updated);
-    setPreviewDecorationId(`custom_frame_${frame.id}`);
-    await equipAchievement(`custom_frame_${frame.id}`);
-  };
-
-  const handleEquipCustomFrame = async (frameIdWithPrefix: string) => {
-    setPreviewDecorationId(frameIdWithPrefix);
-    setIsApplyingDecoration(true);
-    try {
-      await equipAchievement(frameIdWithPrefix);
-    } finally {
-      setIsApplyingDecoration(false);
-    }
-  };
-
   return (
     <div className="lms-container max-w-6xl space-y-6 py-8">
       {/* 1. Header Card: Profile Image + Decoration, Identity, Equipped Badge, Actions */}
@@ -319,8 +196,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
                 user={user}
                 size="2xl"
                 showRoleBadge
-                equippedAchievementId={user.equippedAchievementId}
-                customFrames={customFrames}
               />
               <button
                 type="button"
@@ -366,33 +241,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
                 </span>
               </div>
 
-              {/* Currently Equipped Achievement Banner */}
-              <div className="pt-1">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">현재 장착 업적</div>
-                {currentSavedDecoration ? (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
-                    <AchievementInsignia
-                      badgeId={currentSavedDecoration.id}
-                      icon={currentSavedDecoration.icon}
-                      size="xs"
-                    />
-                    <span className="text-xs font-bold text-slate-900">{currentSavedDecoration.badgeTitle}</span>
-                    <span
-                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
-                        currentSavedDecoration.isAdminOnly
-                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                          : 'bg-indigo-50 text-indigo-700'
-                      }`}
-                    >
-                      {currentSavedDecoration.tierName}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs font-medium">
-                    <span>기본 테두리 장착 중</span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
@@ -407,13 +255,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
               <div className="text-xs text-slate-500 font-semibold">완료 강의</div>
               <div className="text-lg font-bold text-neutral-900 mt-0.5 tabular-nums">
                 {learningStats.completedCoursesCount}개
-              </div>
-            </div>
-            <div className="w-px h-8 bg-slate-200" />
-            <div className="text-center px-2">
-              <div className="text-xs text-slate-500 font-semibold">획득 업적</div>
-              <div className="text-lg font-bold text-neutral-900 mt-0.5 tabular-nums">
-                {userBadges.filter((b) => (isAdmin ? true : (b.unlocked || b.earned))).length}개
               </div>
             </div>
           </div>
@@ -438,7 +279,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
           {(
             [
               { id: 'profile', domId: 'tab-profile-edit', label: '기본 정보', icon: UserIcon },
-              { id: 'decorations', domId: 'tab-profile-decorations', label: '업적 · 장식', icon: Palette },
               { id: 'security', domId: 'tab-profile-security', label: '비밀번호 · 보안', icon: Shield },
               { id: 'stats', domId: 'tab-profile-stats', label: '학습 현황', icon: BookOpen },
             ] as const
@@ -457,7 +297,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
               >
                 <Icon className="h-4 w-4" />
                 {label}
-                {id === 'decorations' && hasDecorationChanges && <span className="h-2 w-2 rounded-full bg-amber-500" />}
                 {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-neutral-900 lg:hidden" />}
               </button>
             );
@@ -583,16 +422,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('decorations')}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <Palette className="w-3.5 h-3.5" />
-                  <span>프로필 장식 관리하기 →</span>
-                </button>
-
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end">
                 <button
                   type="submit"
                   id="btn-save-profile"
@@ -605,395 +435,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
               </div>
             </div>
           </form>
-
-          {/* Quick Decoration Summary Card in Profile Tab */}
-          <div className="bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-white border border-indigo-100 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <Avatar
-                user={user}
-                size="lg"
-                equippedAchievementId={user.equippedAchievementId}
-                customFrames={customFrames}
-              />
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>프로필 테두리 장식</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                  {currentSavedDecoration && (
-                    <AchievementInsignia
-                      badgeId={currentSavedDecoration.id}
-                      icon={currentSavedDecoration.icon}
-                      size="xs"
-                    />
-                  )}
-                  <h3 className="text-sm font-black text-slate-900 truncate">
-                    {currentSavedDecoration
-                      ? currentSavedDecoration.name
-                      : '기본 프로필 테두리'}
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 truncate mt-0.5">
-                  {currentSavedDecoration
-                    ? currentSavedDecoration.description
-                    : '획득한 학습 업적으로 프로필 이미지를 멋지게 장식해보세요.'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('decorations')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 transition-colors shrink-0 cursor-pointer shadow-2xs"
-            >
-              장식 변경
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Profile Decorations & Achievements Frame Selector */}
-      {activeTab === 'decorations' && (
-        <div className="space-y-8">
-          {/* Real-time Preview Banner Card */}
-          <div className="bg-white border border-slate-200/90 rounded-xl p-6 sm:p-8 space-y-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
-                    <Palette className="w-5 h-5" />
-                  </span>
-                  <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                    프로필 장식 및 업적
-                  </h2>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-500">
-                  획득한 업적과 관리자 커스텀 프레임을 프로필 장식으로 설정할 수 있습니다.
-                </p>
-              </div>
-
-              {/* Apply / Cancel Controls */}
-              <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                {hasDecorationChanges && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDecorationId(user.equippedAchievementId ?? null)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>원래대로</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  id="btn-apply-decoration"
-                  onClick={handleApplyDecoration}
-                  disabled={isApplyingDecoration || !hasDecorationChanges}
-                  className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition-all flex items-center gap-2 cursor-pointer shadow-xs disabled:cursor-not-allowed"
-                >
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>{isApplyingDecoration ? '적용 중...' : '프로필에 장착하기'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Interactive Shared Preview Container */}
-            <div className="bg-slate-50/80 rounded-2xl p-6 border border-slate-200/70 flex flex-col sm:flex-row items-center gap-6 justify-between">
-              <div className="flex items-center gap-5">
-                <div className="shrink-0 p-2">
-                  <Avatar
-                    user={user}
-                    size="2xl"
-                    equippedAchievementId={previewDecorationId}
-                    customFrames={customFrames}
-                    showRoleBadge
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>실시간 미리보기 Live Preview</span>
-                  </div>
-                  <div className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 flex-wrap">
-                    <span className="flex items-center gap-2">
-                      {previewDecoration ? (
-                        <>
-                          <AchievementInsignia
-                            badgeId={previewDecoration.id}
-                            icon={previewDecoration.icon}
-                            size="sm"
-                          />
-                          <span>{previewDecoration.name}</span>
-                        </>
-                      ) : (
-                        '기본 장식 (테두리 없음)'
-                      )}
-                    </span>
-                    {previewDecoration && previewDecoration.tierName !== 'CUSTOM ADMIN' && !previewDecoration.id.startsWith('custom_frame_') && (
-                      <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
-                          previewDecoration.isAdminOnly
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                            : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                        }`}
-                      >
-                        {previewDecoration.tierName}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 max-w-md">
-                    {previewDecoration
-                      ? previewDecoration.description
-                      : '특수 프레임 없이 깔끔한 기본 프로필 테두리를 적용합니다.'}
-                  </p>
-                  {hasDecorationChanges && (
-                    <p className="text-[11px] text-amber-600 font-bold pt-1">
-                      * 장식이 선택되었습니다. 우측 상단의 [프로필에 장착하기] 버튼을 눌러 확정하세요.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {previewDecorationId !== null && (
-                <button
-                  type="button"
-                  onClick={() => handleSelectDecoration(null, true, false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors shrink-0 cursor-pointer shadow-2xs"
-                >
-                  기본 테두리로 복원
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Filter Bar */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
-              <button
-                type="button"
-                onClick={() => setDecorationFilter('all')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  decorationFilter === 'all'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                전체 업적 ({userBadges.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setDecorationFilter('earned')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  decorationFilter === 'earned'
-                    ? 'bg-white text-emerald-700 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                획득한 업적 ({userBadges.filter((b) => (isAdmin ? true : (b.unlocked || b.earned))).length})
-              </button>
-              {!isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setDecorationFilter('locked')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    decorationFilter === 'locked'
-                      ? 'bg-white text-slate-700 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  미획득 업적 ({userBadges.filter((b) => !b.unlocked && !b.earned).length})
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setDecorationFilter('admin')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    decorationFilter === 'admin'
-                      ? 'bg-white text-amber-700 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  관리자 전용 ({adminBadges.length})
-                </button>
-              )}
-            </div>
-
-            <div className="text-xs text-slate-400 font-medium">
-              * 카드를 클릭하면 상단에서 즉시 미리볼 수 있습니다.
-            </div>
-          </div>
-
-          {/* Section A: Default Frame Option */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">기본 장식</h3>
-            <div
-              onClick={() => handleSelectDecoration(null, true, false)}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                previewDecorationId === null
-                  ? 'bg-indigo-50/60 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs'
-                  : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 text-2xl font-bold">
-                  👤
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <span>기본 장식 (테두리 없음)</span>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      ✓ 기본 제공
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    모든 특수 프레임 장식을 해제하고 깔끔한 기본 테두리로 표시합니다.
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pl-2">
-                {previewDecorationId === null ? (
-                  <span className="px-3 py-1 rounded-xl text-xs font-black bg-indigo-600 text-white flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>선택됨</span>
-                  </span>
-                ) : (
-                  <span className="px-3 py-1 rounded-xl text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200">
-                    선택
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Section B: Medallion Achievement Cards Grid */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-indigo-600" />
-                <h3 className="text-base font-black text-slate-900">학습 업적 뱃지 및 프레임</h3>
-                <span className="text-xs text-slate-400 font-semibold">
-                  (총 {filteredBadges.length}개)
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredBadges.map((badge) => {
-                const dec = PROFILE_DECORATIONS[badge.id];
-                const isEarned = isAdmin ? true : (badge.unlocked || badge.earned);
-                const isSelected = previewDecorationId === badge.id;
-                const isEquipped = user.equippedAchievementId === badge.id;
-
-                return (
-                  <div
-                    key={badge.id}
-                    onClick={() => handleSelectDecoration(badge.id, isEarned, badge.isAdminOnly)}
-                    className={`p-4 rounded-3xl border transition-all flex flex-col justify-between gap-4 ${
-                      !isEarned
-                        ? 'bg-slate-50/60 border-slate-200 opacity-60 grayscale cursor-not-allowed'
-                        : isSelected
-                        ? 'bg-indigo-50/50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-md cursor-pointer'
-                        : badge.isAdminOnly
-                        ? 'bg-amber-50/20 border-amber-200 hover:border-amber-400 cursor-pointer'
-                        : 'bg-white border-slate-200 hover:border-indigo-200 hover:shadow-2xs cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3.5">
-                      {/* 6-Layer Medallion Badge Icon */}
-                      <div className="shrink-0 p-1">
-                        <MedallionBadge
-                          badge={badge}
-                          isEarned={isEarned}
-                          isEquipped={isEquipped}
-                          size="md"
-                        />
-                      </div>
-
-                      {/* Badge Details */}
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                            {badge.title}
-                          </h4>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingBadge(badge);
-                              }}
-                              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                              title="업적 명칭 수정"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="text-[11px] font-bold text-indigo-600 truncate">
-                          프레임: {dec?.name || badge.title}
-                        </div>
-
-                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                          {dec?.description || badge.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
-                          badge.isAdminOnly
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                            : dec?.badgeClass || 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {badge.isAdminOnly ? 'ADMIN ONLY' : dec?.tierName || badge.tier.toUpperCase()}
-                      </span>
-
-                      {isEquipped ? (
-                        <span className="text-xs font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          <span>장착 중</span>
-                        </span>
-                      ) : isSelected ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleApplyDecoration();
-                          }}
-                          className="text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-lg flex items-center gap-1 shadow-xs cursor-pointer transition-all hover:scale-105"
-                        >
-                          <Check className="w-3 h-3 stroke-[3]" />
-                          <span>즉시 장착</span>
-                        </button>
-                      ) : (
-                        <span className="text-xs font-semibold text-slate-400">
-                          {isEarned ? '장식 선택 →' : '미획득'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Section C: Admin Custom Frame Editor (Requirement 17-26) */}
-          {isAdmin && (
-            <div className="pt-4">
-              <AdminFrameEditor
-                onFrameSaved={handleFrameSaved}
-                onEquipFrame={handleEquipCustomFrame}
-              />
-            </div>
-          )}
         </div>
       )}
 
@@ -1213,17 +654,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
         </div>
       </div>
 
-      {/* Badge Title Edit Modal */}
-      <BadgeTitleModal
-        badge={editingBadge}
-        isOpen={!!editingBadge}
-        onClose={() => setEditingBadge(null)}
-        actorId={user.id}
-        actorRole={user.role}
-        onTitleUpdated={(badgeId, newTitle) => {
-          setBadgeVersion((v) => v + 1);
-        }}
-      />
     </div>
   );
 };

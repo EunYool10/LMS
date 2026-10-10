@@ -4,10 +4,7 @@ import { User, UserRole } from '../../types';
 import { storage } from '../../services/storage';
 import { Avatar } from '../common/Avatar';
 import { VerifiedBadge } from '../common/VerifiedBadge';
-import { ProfileFrame } from './ProfileFrame';
-import { AchievementInsignia } from './AchievementInsignia';
-import { getProfileDecoration } from '../../utils/profileDecorations';
-import { getRoleMetadata, getRoleLabel, isServiceOwner, isAdminRole, getDefaultFrameForRole } from '../../utils/rbac';
+import { getRoleMetadata, getRoleLabel, isServiceOwner, isAdminRole } from '../../utils/rbac';
 
 export interface UserProfilePreviewModalProps {
   userId: string | null;
@@ -220,19 +217,10 @@ export const UserProfilePreviewModal: React.FC<UserProfilePreviewModalProps> = (
     }
   };
 
-  // Resolve decoration data for equipped achievement frame
   const isSuperAdmin = isServiceOwner(profileUser?.role);
   const isAdmin = isAdminRole(profileUser?.role);
   const isInstructor = (profileUser?.role as string) === 'INSTRUCTOR' || (profileUser?.role as string) === 'instructor';
 
-  const equippedDecoration = useMemo(() => {
-    if (!profileUser) return null;
-    return getProfileDecoration(
-      profileUser.equippedAchievementId,
-      profileUser.role,
-      profileUser.customFrames
-    );
-  }, [profileUser]);
 
   if (!isModalOpen) return null;
 
@@ -322,23 +310,14 @@ export const UserProfilePreviewModal: React.FC<UserProfilePreviewModalProps> = (
               <div className="text-center pt-2 pb-1 overflow-visible">
                 {/* ProfileFrame wrapping Avatar (Requirement 2 & 13) */}
                 <div className="relative inline-flex items-center justify-center p-5 mb-1 overflow-visible">
-                  <ProfileFrame
-                    decorationId={equippedDecoration?.id || getDefaultFrameForRole(profileUser.role)}
-                    userRole={profileUser.role}
-                    size="xl"
-                    showOrnaments={true}
-                    className="transition-transform duration-300 hover:scale-105"
-                  >
                     <Avatar
                       user={profileUser}
                       name={profileUser.name}
                       src={profileUser.avatar}
                       size="xl"
-                      showFrame={false}
                       showRoleBadge={false}
                       showVerifiedBadge={false}
                     />
-                  </ProfileFrame>
                 </div>
 
                 {/* User Name & Official Verification Badge (Requirement 7) */}
@@ -407,37 +386,13 @@ export const UserProfilePreviewModal: React.FC<UserProfilePreviewModalProps> = (
                 )}
               </div>
 
-              {/* Equipped Achievement / Frame Showcase (If active) */}
-              {equippedDecoration && (
-                <div className="rounded-2xl p-3 bg-gradient-to-r from-slate-50 via-indigo-50/30 to-purple-50/20 border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center p-1.5 shrink-0 select-none">
-                      <AchievementInsignia
-                        badgeId={equippedDecoration.id}
-                        icon={equippedDecoration.icon}
-                        size="sm"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-slate-400 font-semibold tracking-wide">장착 프로필 프레임</div>
-                      <div className="text-xs font-black text-slate-900 truncate">
-                        {equippedDecoration.name}
-                      </div>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-black shrink-0 ${equippedDecoration.badgeClass}`}>
-                    {equippedDecoration.tierName}
-                  </span>
-                </div>
-              )}
-
               {/* Learning Activity Statistics (Requirement 9 & 10) */}
-              {stats && (stats.enrolledCount > 0 || stats.completedCount > 0 || stats.earnedBadgesCount > 0) && (
+              {stats && (stats.enrolledCount > 0 || stats.completedCount > 0) && (
                 <div className="pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between px-1 mb-2.5">
                     <span className="text-xs font-bold text-slate-600">학습 활동</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {/* 1. 수강 강의 */}
                     <div className="bg-slate-50/90 hover:bg-indigo-50/40 border border-slate-200/80 hover:border-indigo-200 rounded-2xl p-3 text-center transition-all duration-200 group shadow-2xs">
                       <div className="flex items-center justify-center mb-1">
@@ -464,18 +419,6 @@ export const UserProfilePreviewModal: React.FC<UserProfilePreviewModalProps> = (
                       </div>
                     </div>
 
-                    {/* 3. 획득 업적 */}
-                    <div className="bg-slate-50/90 hover:bg-amber-50/40 border border-slate-200/80 hover:border-amber-200 rounded-2xl p-3 text-center transition-all duration-200 group shadow-2xs">
-                      <div className="flex items-center justify-center mb-1">
-                        <Award className="w-4 h-4 text-amber-500 opacity-80 group-hover:scale-110 transition-transform" />
-                      </div>
-                      <div className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight leading-none my-1">
-                        {stats.earnedBadgesCount}
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-500">
-                        획득 업적
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Course, User } from '../../types';
 import { VerifiedBadge } from '../common/VerifiedBadge';
-import tdsOfficialLogo from '../../assets/branding/tds-official-logo.png';
+import { TDSNTWordmark } from '../common/BrandLogo';
 import { formatCertificateDate } from '../../utils/certificate';
 
 interface CourseCompletionModalProps {
@@ -51,7 +51,6 @@ export const CourseCompletionModal: React.FC<CourseCompletionModalProps> = ({
   const [completionDate, setCompletionDate] = useState<string>('');
   const [completionTimestamp, setCompletionTimestamp] = useState<string>('');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
-  const [logoFailed, setLogoFailed] = useState<boolean>(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -239,30 +238,16 @@ export const CourseCompletionModal: React.FC<CourseCompletionModalProps> = ({
               <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#8C6D3B] pointer-events-none" />
 
               {/* Subtle Watermark Logo Background */}
-              {!logoFailed && (
-                <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
-                  <img
-                    src={tdsOfficialLogo || '/assets/branding/tds-official-logo.png'}
-                    alt=""
-                    className="w-64 h-64 sm:w-72 sm:h-72 object-contain grayscale"
-                    onError={() => setLogoFailed(true)}
-                  />
-                </div>
-              )}
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none text-neutral-900">
+                <TDSNTWordmark className="w-[70%] h-auto" />
+              </div>
 
               {/* Top Authority Header & Title */}
               <div className="relative z-10 flex flex-col items-center justify-center space-y-1 pb-2 text-center">
                 <div className="flex items-center justify-center gap-2">
-                  {!logoFailed && (
-                    <img
-                      src={tdsOfficialLogo || '/assets/branding/tds-official-logo.png'}
-                      alt="TDSN"
-                      className="h-6 sm:h-7 w-auto object-contain block"
-                      onError={() => setLogoFailed(true)}
-                    />
-                  )}
+                  <TDSNTWordmark className="h-4 sm:h-5 w-auto text-[#1b2c50]" />
                   <span className="text-[11px] sm:text-xs font-serif font-bold text-[#8C6D3B] tracking-[0.28em] uppercase">
-                    TDSN Global Academy
+                    TDSNT Academy
                   </span>
                 </div>
 

@@ -3,9 +3,8 @@ import { storage } from '../services/storage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { CourseCompletionModal } from '../components/student/CourseCompletionModal';
-import { AchievementBookModal } from '../components/student/AchievementBookModal';
 import { StudentDashboard, DashboardTab } from '../components/student/StudentDashboard';
-import { UserLearningGoal, AchievementBadge, LessonBookmark, StudentNote } from '../types';
+import { UserLearningGoal, LessonBookmark, StudentNote } from '../types';
 
 interface DashboardPageProps {
   onNavigate: (view: string, param?: string) => void;
@@ -20,7 +19,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [goalHoursInput, setGoalHoursInput] = useState<number>(10);
   const [streakDays, setStreakDays] = useState<number>(1);
   const [learningGoal, setLearningGoal] = useState<UserLearningGoal | undefined>(undefined);
-  const [badges, setBadges] = useState<AchievementBadge[]>([]);
   const [bookmarks, setBookmarks] = useState<LessonBookmark[]>([]);
   const [studentNotes, setStudentNotes] = useState<StudentNote[]>([]);
   const [wishlistCourses, setWishlistCourses] = useState<any[]>([]);
@@ -31,9 +29,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const [isCertModalOpen, setIsCertModalOpen] = useState<boolean>(false);
   const [certModalAutoPrint, setCertModalAutoPrint] = useState<boolean>(false);
 
-  // Achievement Book Modal States
-  const [isAchievementBookOpen, setIsAchievementBookOpen] = useState<boolean>(false);
-  const [selectedAchievementBadge, setSelectedAchievementBadge] = useState<AchievementBadge | null>(null);
 
   if (!user) {
     return (
@@ -105,8 +100,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     const goal = storage.getLearningGoal(user.id);
     setLearningGoal(goal);
     if (goal) setGoalHoursInput(goal.targetHoursWeekly);
-    const userBadges = storage.getBadges(user.id);
-    setBadges(userBadges);
     const bmarks = storage.getBookmarks(user.id);
     setBookmarks(bmarks);
     const notes = storage.getStudentNotes(user.id);
@@ -175,7 +168,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const todayDayIndex = (today.getDay() + 6) % 7; // 0 for Mon, 6 for Sun
   const activityHeatmap = storage.getUserActivityHeatmap(user.id);
 
-  const userBadgeRank = storage.getUserBadgeTitle(user.id);
 
   // Compute date string (YYYY-MM-DD) for each day of current week (Mon-Sun)
   const currentWeekDays = daysOfWeek.map((day, idx) => {
@@ -190,7 +182,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
   const dashboardProps = {
     user,
-    userBadgeRank,
     overallProgressPercentage,
     totalCoursesCount,
     inProgressList,
@@ -216,14 +207,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     handleDeleteBookmark,
     handleDeleteNote,
     onNavigate,
-    onOpenAchievements: (badge?: AchievementBadge | null) => {
-      setSelectedAchievementBadge(badge || null);
-      setIsAchievementBookOpen(true);
-    },
     onWishlistToggle: handleWishlistToggle,
     tab,
     setTab,
-    badges,
     enrollments,
   };
 
@@ -254,17 +240,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         />
       )}
 
-      {/* Achievement Book Modal (Full Encyclopedia with Filters, Sorting, Detail View) */}
-      <AchievementBookModal
-        isOpen={isAchievementBookOpen}
-        onClose={() => {
-          setIsAchievementBookOpen(false);
-          setSelectedAchievementBadge(null);
-        }}
-        badges={badges}
-        userBadgeRank={userBadgeRank}
-        initialBadge={selectedAchievementBadge}
-      />
     </>
   );
 };

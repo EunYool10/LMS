@@ -132,7 +132,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentView, onNavig
 
       <div className="space-y-1 border-t border-neutral-200 p-3">
         <div className="flex items-center gap-2.5 px-3 py-2">
-          <Avatar user={user} size="xs" showVerifiedBadge={false} showOrnaments={false} />
+          <Avatar user={user} size="xs" showVerifiedBadge={false} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-neutral-900">{user?.name || '관리자'}</span>
             <span className="block text-xs text-neutral-500">{getRoleLabel(user?.role)}</span>

@@ -204,6 +204,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
   return (
     <div className="min-w-0">
+      <AnnouncementBanner />
+
       {/* ── Intro band: greeting, search, and the learner's summary ── */}
       <section className="border-b border-neutral-200 bg-white">
         <div className="lms-container grid gap-8 py-8 sm:py-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center lg:gap-12">
@@ -297,8 +299,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       </section>
 
       <div className="lms-container space-y-10 py-8 sm:py-10">
-        <AnnouncementBanner />
-
         {/* ── Admin shortcuts ── */}
         {isAdmin && (
           <section className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center">

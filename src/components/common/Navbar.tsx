@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                 aria-haspopup="menu"
                 className="flex h-9 items-center gap-2 rounded-full pl-0.5 pr-1 sm:pr-2.5 hover:bg-neutral-100 cursor-pointer"
               >
-                <Avatar user={user} size="xs" showVerifiedBadge={false} showOrnaments={false} />
+                <Avatar user={user} size="xs" showVerifiedBadge={false} />
                 <span className="hidden max-w-[120px] truncate text-sm font-medium text-neutral-800 sm:block">{user.name}</span>
                 <ChevronDown className="hidden w-4 h-4 text-neutral-400 sm:block" />
               </button>
@@ -90,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
                   className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg"
                 >
                   <div className="flex items-center gap-3 px-3 py-2.5">
-                    <Avatar user={user} size="sm" showVerifiedBadge={false} showOrnaments={false} />
+                    <Avatar user={user} size="sm" showVerifiedBadge={false} />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-neutral-900">{user.name}</p>
                       <p className="truncate text-xs text-neutral-500">{user.email}</p>

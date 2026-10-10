@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BookOpen } from 'lucide-react';
-import officialFallback from '../../assets/branding/tds-official-logo.png';
+import { TDSNTWordmark } from './BrandLogo';
 
 interface CourseThumbnailProps {
   src?: string | null;
@@ -35,9 +35,6 @@ export const CourseThumbnail: React.FC<CourseThumbnailProps> = ({
 
   const hasValidSrc = Boolean(src && typeof src === 'string' && src.trim().length > 0 && !src.includes('placeholder') && !src.includes('unsplash.com'));
 
-  // If no source provided initially, use fallback directly
-  const imageSource = hasPrimaryError || !hasValidSrc ? officialFallback : src!;
-
   const handleLoad = () => {
     setIsLoading(false);
   };
@@ -71,23 +68,23 @@ export const CourseThumbnail: React.FC<CourseThumbnailProps> = ({
     );
   }
 
-  const isFallbackActive = hasPrimaryError || !hasValidSrc;
+  if (hasPrimaryError || !hasValidSrc) {
+    return (
+      <div className={`flex items-center justify-center bg-navy-50 text-navy-700 ${containerClassName}`} title={alt}>
+        <TDSNTWordmark className="w-[60%] h-auto" />
+      </div>
+    );
+  }
 
   return (
     <div className={`relative ${containerClassName}`}>
-      {/* Loading Skeleton */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-slate-200 animate-pulse flex items-center justify-center z-10" />
-      )}
-
+      {isLoading && <div className="absolute inset-0 z-10 animate-pulse bg-neutral-200" />}
       <img
-        src={imageSource}
+        src={src!}
         alt={alt || '강의 썸네일'}
         onLoad={handleLoad}
         onError={handleError}
-        className={`${className} ${
-          isFallbackActive ? 'object-contain p-1.5 bg-slate-900' : 'object-cover'
-        } ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`}
+        className={`${className} object-cover ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-150`}
         loading="lazy"
         referrerPolicy="no-referrer"
       />

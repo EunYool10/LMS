@@ -30,7 +30,6 @@ import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAnnouncementsPage } from './pages/admin/AdminAnnouncementsPage';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
-import { AchievementNotificationListener } from './components/common/AchievementNotificationListener';
 
 import { ShieldAlert, ArrowLeft, LogIn } from 'lucide-react';
 
@@ -166,8 +165,6 @@ const AppContent: React.FC = () => {
       {/* Mobile Notification Bottom Sheet / Modal */}
       <MobileNotificationModal onNavigate={handleNavigate} />
 
-      {/* Global Achievement Real-time Toast & Action Listener */}
-      <AchievementNotificationListener />
     </div>
   );
 };

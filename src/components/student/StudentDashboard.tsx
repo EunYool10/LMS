@@ -1,19 +1,17 @@
 import React from 'react';
 import { Avatar } from '../common/Avatar';
 import { CourseCard } from './CourseCard';
-import { AchievementCompactWidget } from './AchievementCompactWidget';
 import { EmptyState } from '../common/EmptyState';
 import { CourseCover } from '../common/CourseCover';
 import { resolveCategory } from '../common/CategoryIcon';
-import { Award, Check, Download, Flame, PlayCircle, Settings, Trash2, Trophy, X } from 'lucide-react';
-import { User, UserLearningGoal, AchievementBadge, LessonBookmark, StudentNote } from '../../types';
-import { getRoleLabel, isAdminRole } from '../../utils/rbac';
+import { Award, Check, Download, Flame, PlayCircle, Settings, Trash2, X } from 'lucide-react';
+import { User, UserLearningGoal, LessonBookmark, StudentNote } from '../../types';
+import { getRoleLabel } from '../../utils/rbac';
 
 export type DashboardTab = 'in_progress' | 'completed' | 'wishlist' | 'bookmarks_notes' | 'quizzes';
 
 export interface StudentDashboardViewProps {
   user: User;
-  userBadgeRank: { title: string; badge: string; color: string; tier: string };
   overallProgressPercentage: number;
   totalCoursesCount: number;
   inProgressList: any[];
@@ -39,11 +37,9 @@ export interface StudentDashboardViewProps {
   handleDeleteBookmark: (bmId: string) => void;
   handleDeleteNote: (noteId: string) => void;
   onNavigate: (view: string, param?: string) => void;
-  onOpenAchievements: (badge?: AchievementBadge | null) => void;
   onWishlistToggle: (courseId: string) => void;
   tab: DashboardTab;
   setTab: (tab: DashboardTab) => void;
-  badges: AchievementBadge[];
   enrollments: any[];
 }
 
@@ -59,7 +55,6 @@ const formatMinutes = (mins: number) => {
 
 export const StudentDashboard: React.FC<StudentDashboardViewProps> = ({
   user,
-  userBadgeRank,
   overallProgressPercentage,
   totalCoursesCount,
   inProgressList,
@@ -85,11 +80,9 @@ export const StudentDashboard: React.FC<StudentDashboardViewProps> = ({
   handleDeleteBookmark,
   handleDeleteNote,
   onNavigate,
-  onOpenAchievements,
   onWishlistToggle,
   tab,
   setTab,
-  badges,
   enrollments,
 }) => {
   const goalHours = learningGoal?.targetHoursWeekly || 10;
@@ -119,25 +112,16 @@ export const StudentDashboard: React.FC<StudentDashboardViewProps> = ({
         <div className="lms-container space-y-6 py-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-4">
-              <Avatar user={user} size="md" showRoleBadge={false} showOrnaments={false} />
+              <Avatar user={user} size="md" showRoleBadge={false} />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold text-neutral-900">내 학습</h1>
                 <p className="mt-0.5 truncate text-sm text-neutral-500">
                   {user.name}님 ·{' '}
-                  {isAdminRole(user.role) ? getRoleLabel(user.role) : `${userBadgeRank.badge} ${userBadgeRank.title}`}
+                  {getRoleLabel(user.role)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <button
-                type="button"
-                id="btn-dashboard-open-achievements-hero"
-                onClick={() => onOpenAchievements(null)}
-                className="lms-btn lms-btn-secondary lms-btn-sm"
-              >
-                <Trophy className="h-4 w-4 text-amber-500" />
-                업적 도감
-              </button>
               <button
                 type="button"
                 id="btn-dashboard-profile-settings"
@@ -513,13 +497,6 @@ export const StudentDashboard: React.FC<StudentDashboardViewProps> = ({
               </div>
             </dl>
           </section>
-
-          <AchievementCompactWidget
-            badges={badges}
-            userBadgeRank={userBadgeRank}
-            onOpenBook={() => onOpenAchievements(null)}
-            onSelectBadge={(badge) => onOpenAchievements(badge)}
-          />
         </aside>
       </div>
     </div>
