@@ -63,114 +63,43 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const isDashboardActive = currentView === 'dashboard';
   const isAdminActive = currentView.startsWith('admin');
 
+  const items = [
+    { id: 'btn-mobile-nav-home', label: '홈', icon: Home, active: isHomeActive, onClick: () => { handleNav('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+    { id: 'btn-mobile-nav-explore', label: '탐색', icon: Compass, active: isExploreActive, onClick: handleExplore },
+    { id: 'btn-mobile-nav-learning', label: '내 학습', icon: BookOpen, active: isDashboardActive, onClick: () => handleNav('dashboard') },
+    { id: 'btn-mobile-nav-notifications', label: '알림', icon: Bell, active: false, onClick: handleOpenNotification, badge: unreadCount },
+    ...(isAdmin
+      ? [{ id: 'btn-mobile-nav-admin', label: '관리자', icon: Shield, active: isAdminActive, onClick: () => onNavigate('admin-dashboard') }]
+      : []),
+  ];
+
   return (
     <nav
       aria-label="모바일 하단 탐색"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] px-2 pt-1.5 pb-[calc(8px+env(safe-area-inset-bottom,0px))] flex items-center justify-around select-none"
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-neutral-200 bg-white/95 px-1 pt-1 pb-[calc(4px+env(safe-area-inset-bottom,0px))] backdrop-blur md:hidden"
     >
-      {/* 1. 홈 */}
-      <button
-        type="button"
-        id="btn-mobile-nav-home"
-        onClick={() => {
-          handleNav('home');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        className={`flex-1 flex flex-col items-center justify-center min-w-[50px] min-h-[44px] py-1 px-1 rounded-xl transition-all cursor-pointer touch-manipulation ${
-          isHomeActive
-            ? 'text-indigo-600 font-extrabold scale-105'
-            : 'text-slate-500 hover:text-slate-900 active:scale-95 font-medium'
-        }`}
-      >
-        <Home
-          size={20}
-          strokeWidth={isHomeActive ? 2.5 : 2}
-          className={`w-5 h-5 shrink-0 block ${isHomeActive ? 'stroke-[2.5]' : ''}`}
-          aria-hidden="true"
-        />
-        <span className="text-[10px] mt-0.5 leading-none">홈</span>
-      </button>
-
-      {/* 2. 강의 탐색 / 검색 */}
-      <button
-        type="button"
-        id="btn-mobile-nav-explore"
-        onClick={handleExplore}
-        className={`flex-1 flex flex-col items-center justify-center min-w-[50px] min-h-[44px] py-1 px-1 rounded-xl transition-all cursor-pointer touch-manipulation ${
-          isExploreActive
-            ? 'text-indigo-600 font-extrabold scale-105'
-            : 'text-slate-500 hover:text-slate-900 active:scale-95 font-medium'
-        }`}
-      >
-        <Compass
-          size={20}
-          strokeWidth={isExploreActive ? 2.5 : 2}
-          className={`w-5 h-5 shrink-0 block transition-transform ${isExploreActive ? 'scale-105' : ''}`}
-          aria-hidden="true"
-        />
-        <span className="text-[10px] mt-0.5 leading-none">탐색</span>
-      </button>
-
-      {/* 3. 내 학습 */}
-      <button
-        type="button"
-        id="btn-mobile-nav-learning"
-        onClick={() => handleNav('dashboard')}
-        className={`flex-1 flex flex-col items-center justify-center min-w-[50px] min-h-[44px] py-1 px-1 rounded-xl transition-all cursor-pointer touch-manipulation ${
-          isDashboardActive
-            ? 'text-indigo-600 font-extrabold scale-105'
-            : 'text-slate-500 hover:text-slate-900 active:scale-95 font-medium'
-        }`}
-      >
-        <BookOpen
-          size={20}
-          strokeWidth={isDashboardActive ? 2.5 : 2}
-          className={`w-5 h-5 shrink-0 block ${isDashboardActive ? 'stroke-[2.5]' : ''}`}
-          aria-hidden="true"
-        />
-        <span className="text-[10px] mt-0.5 leading-none">내 학습</span>
-      </button>
-
-      {/* 4. 알림 (학생 및 관리자 공통 상시 제공) */}
-      <button
-        type="button"
-        id="btn-mobile-nav-notifications"
-        onClick={handleOpenNotification}
-        className="flex-1 relative flex flex-col items-center justify-center min-w-[50px] min-h-[44px] py-1 px-1 rounded-xl transition-all cursor-pointer touch-manipulation text-slate-500 hover:text-slate-900 active:scale-95 font-medium"
-      >
-        <div className="relative">
-          <Bell size={20} strokeWidth={2} className="w-5 h-5 shrink-0 block" aria-hidden="true" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1.5 min-w-[15px] h-[15px] bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center px-0.5 ring-2 ring-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </div>
-        <span className="text-[10px] mt-0.5 leading-none">알림</span>
-      </button>
-
-      {/* 5. 관리자 콘솔 (관리자 권한 계정일 때 표시) */}
-      {isAdmin && (
+      {items.map(({ id, label, icon: Icon, active, onClick, badge }) => (
         <button
+          key={id}
+          id={id}
           type="button"
-          id="btn-mobile-nav-admin"
-          onClick={() => onNavigate('admin-dashboard')}
-          className={`flex-1 flex flex-col items-center justify-center min-w-[50px] min-h-[44px] py-1 px-1 rounded-xl transition-all cursor-pointer touch-manipulation ${
-            isAdminActive
-              ? 'text-indigo-600 font-extrabold scale-105'
-              : 'text-slate-500 hover:text-slate-900 active:scale-95 font-medium'
+          onClick={onClick}
+          aria-current={active ? 'page' : undefined}
+          className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 rounded-lg cursor-pointer touch-manipulation ${
+            active ? 'text-brand-600' : 'text-neutral-500'
           }`}
         >
-          <Shield
-            size={20}
-            strokeWidth={isAdminActive ? 2.5 : 2}
-            className={`w-5 h-5 shrink-0 block ${isAdminActive ? 'stroke-[2.5]' : ''}`}
-            aria-hidden="true"
-          />
-          <span className="text-[10px] mt-0.5 leading-none">관리자</span>
+          <span className="relative">
+            <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.25 : 1.75} aria-hidden="true" />
+            {!!badge && badge > 0 && (
+              <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white ring-2 ring-white">
+                {badge > 9 ? '9+' : badge}
+              </span>
+            )}
+          </span>
+          <span className={`text-[11px] leading-none ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
         </button>
-      )}
+      ))}
     </nav>
   );
 };
-

@@ -189,30 +189,15 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
       return (
         <>
           <div
-            className={`border border-dashed border-indigo-200/90 bg-indigo-50/40 hover:bg-indigo-50/70 rounded-2xl p-3 sm:px-4 sm:py-3 transition-colors flex items-center justify-between gap-3 text-xs ${className}`}
+            className={`flex items-center justify-between gap-3 rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-3 ${className}`}
           >
-            <div className="flex items-center gap-2.5 text-slate-600 min-w-0">
-              <span className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 shadow-2xs">
-                <Megaphone className="w-4 h-4" />
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                  <span>[운영진 전용]</span>
-                  <span className="text-slate-500 font-normal">현재 게시된 전사 공지사항이 없습니다.</span>
-                </div>
-                <p className="text-[11px] text-slate-400 truncate">
-                  수강생 메인 포털 최상단에 노출될 새로운 공지사항을 등록해 보세요.
-                </p>
-              </div>
+            <div className="flex min-w-0 items-center gap-2.5 text-[13px] text-neutral-600">
+              <Megaphone className="w-4 h-4 shrink-0 text-neutral-400" />
+              <span className="truncate">게시 중인 전사 공지가 없습니다. 홈 상단에 노출할 공지를 등록할 수 있어요.</span>
             </div>
-
-            <button
-              type="button"
-              onClick={handleOpenEdit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs cursor-pointer shrink-0"
-            >
+            <button type="button" onClick={handleOpenEdit} className="lms-btn lms-btn-secondary lms-btn-sm shrink-0">
               <Edit3 className="w-3.5 h-3.5" />
-              <span>공지 등록</span>
+              공지 등록
             </button>
           </div>
 
@@ -225,36 +210,12 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
 
   // Priority styling
   const priority = activeAnnouncement?.priority || 'important';
-  const getBannerTheme = () => {
-    switch (priority) {
-      case 'urgent':
-        return {
-          wrapper: 'from-rose-50/95 via-white to-rose-50/60 border-rose-200/90 hover:border-rose-300',
-          iconBg: 'bg-rose-600 text-white shadow-rose-500/20',
-          badge: 'bg-rose-100 text-rose-800 border-rose-200',
-          badgeLabel: '긴급 공지',
-          pulseDot: 'bg-rose-500',
-        };
-      case 'important':
-        return {
-          wrapper: 'from-amber-50/90 via-white to-indigo-50/50 border-amber-200/80 hover:border-amber-300',
-          iconBg: 'bg-amber-600 text-white shadow-amber-500/20',
-          badge: 'bg-amber-100 text-amber-800 border-amber-200',
-          badgeLabel: '중요 공지',
-          pulseDot: 'bg-amber-500',
-        };
-      default:
-        return {
-          wrapper: 'from-indigo-50/90 via-white to-sky-50/50 border-indigo-200/80 hover:border-indigo-300',
-          iconBg: 'bg-indigo-600 text-white shadow-indigo-500/20',
-          badge: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-          badgeLabel: '사내 공지',
-          pulseDot: 'bg-indigo-500',
-        };
-    }
-  };
-
-  const theme = getBannerTheme();
+  const theme =
+    priority === 'urgent'
+      ? { dot: 'bg-rose-500', label: '긴급', text: 'text-rose-700' }
+      : priority === 'important'
+      ? { dot: 'bg-amber-500', label: '중요', text: 'text-amber-700' }
+      : { dot: 'bg-brand-500', label: '공지', text: 'text-brand-700' };
 
   function renderModal() {
     if (typeof document === 'undefined') return null;
@@ -470,83 +431,42 @@ export const AnnouncementBanner: React.FC<AnnouncementBannerProps> = ({
       <aside
         aria-label="사내 공지사항"
         onClick={handleOpenDetail}
-        className={`group relative overflow-hidden bg-gradient-to-r ${theme.wrapper} border rounded-2xl p-3 sm:px-4 sm:py-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none ${className}`}
+        className={`group flex cursor-pointer select-none items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 transition-colors hover:border-neutral-300 ${className}`}
       >
-        <div className="flex items-center justify-between gap-3 min-w-0">
-          {/* Left: Icon, Priority Badge, Title & Snippet */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
-            <div
-              className={`w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-xl ${theme.iconBg} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}
-            >
-              <Megaphone className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap min-w-0">
-                {/* Clean Priority Badge */}
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold border shrink-0 ${theme.badge}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${theme.pulseDot} animate-pulse`} />
-                  <span>{theme.badgeLabel}</span>
-                </span>
-
-                {/* Bold Announcement Title */}
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate tracking-tight">
-                  {activeAnnouncement.title}
-                </h4>
-
-                <span aria-hidden="true" className="text-slate-300 hidden md:inline">·</span>
-
-                {/* Snippet preview */}
-                <p className="text-xs text-slate-600 truncate hidden md:inline flex-1">
-                  {activeAnnouncement.content}
-                </p>
-              </div>
-
-              {/* Mobile text preview */}
-              <p className="text-[11px] text-slate-600 truncate mt-0.5 md:hidden">
-                {activeAnnouncement.content}
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Detail Trigger & Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* View Detail Action Pill */}
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 group-hover:text-indigo-600 group-hover:bg-indigo-50/80 rounded-lg transition-colors">
-              <span>상세보기</span>
-              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-            </span>
-
-            {/* Admin Notice Edit Button */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={handleOpenEdit}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 shadow-2xs transition-all cursor-pointer"
-                title="운영진 공지사항 관리"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden xs:inline">수정</span>
-              </button>
-            )}
-
-            {/* Dismiss Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDismissed(true);
-              }}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              title="공지 배너 닫기"
-              aria-label="공지 닫기"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ${theme.text}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
+          {theme.label}
+        </span>
+        <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2">
+          <h4 className="truncate text-sm font-semibold text-neutral-900">{activeAnnouncement.title}</h4>
+          <p className="truncate text-[13px] text-neutral-500 md:flex-1">{activeAnnouncement.content}</p>
         </div>
+        <span className="hidden shrink-0 items-center text-[13px] font-medium text-neutral-500 group-hover:text-neutral-900 sm:inline-flex">
+          자세히 <ChevronRight className="w-4 h-4" />
+        </span>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleOpenEdit}
+            className="shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 cursor-pointer"
+            title="공지 수정"
+            aria-label="공지 수정"
+          >
+            <Edit3 className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsDismissed(true);
+          }}
+          className="shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 cursor-pointer"
+          title="공지 닫기"
+          aria-label="공지 닫기"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </aside>
 
       {/* Admin Edit Modal */}

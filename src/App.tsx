@@ -50,7 +50,7 @@ const AppContent: React.FC = () => {
   const isLearnRoute = currentView === 'learn';
 
   return (
-    <div className="min-h-screen min-h-screen-dvh flex flex-col bg-[#F8FAFC] text-[#1E293B] font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen min-h-screen-dvh flex flex-col bg-neutral-50 text-neutral-900 font-sans antialiased">
       {/* Top Universal Navbar */}
       <Navbar currentView={currentView} onNavigate={handleNavigate} />
 
