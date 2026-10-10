@@ -307,11 +307,9 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-8">
+    <div className="lms-container max-w-6xl space-y-6 py-8">
       {/* 1. Header Card: Profile Image + Decoration, Identity, Equipped Badge, Actions */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
-        {/* Subtle accent background in top corner */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-linear-to-bl from-indigo-50/60 via-purple-50/30 to-transparent pointer-events-none -z-0" />
+      <div className="relative overflow-hidden rounded-xl border border-neutral-200 bg-white p-6 sm:p-8">
 
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
@@ -340,7 +338,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
             {/* Profile Identity Details */}
             <div className="space-y-2">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                <h1 className="text-2xl font-bold text-neutral-900">
                   {user.name}
                 </h1>
                 <p className="text-sm font-semibold text-slate-400">
@@ -399,22 +397,22 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
           </div>
 
           {/* Quick Learning Stat Snapshot */}
-          <div className="flex items-center gap-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 w-full md:w-auto shrink-0 justify-around">
+          <div className="flex w-full shrink-0 items-center justify-around gap-4 rounded-lg border border-neutral-200 p-4 md:w-auto">
             <div className="text-center px-2">
               <div className="text-xs text-slate-500 font-semibold">수강 강의</div>
-              <div className="text-lg font-black text-slate-900 mt-0.5">{learningStats.totalEnrolled}개</div>
+              <div className="text-lg font-bold text-neutral-900 mt-0.5 tabular-nums">{learningStats.totalEnrolled}개</div>
             </div>
             <div className="w-px h-8 bg-slate-200" />
             <div className="text-center px-2">
               <div className="text-xs text-slate-500 font-semibold">완료 강의</div>
-              <div className="text-lg font-black text-emerald-600 mt-0.5">
+              <div className="text-lg font-bold text-neutral-900 mt-0.5 tabular-nums">
                 {learningStats.completedCoursesCount}개
               </div>
             </div>
             <div className="w-px h-8 bg-slate-200" />
             <div className="text-center px-2">
               <div className="text-xs text-slate-500 font-semibold">획득 업적</div>
-              <div className="text-lg font-black text-indigo-600 mt-0.5">
+              <div className="text-lg font-bold text-neutral-900 mt-0.5 tabular-nums">
                 {userBadges.filter((b) => (isAdmin ? true : (b.unlocked || b.earned))).length}개
               </div>
             </div>
@@ -431,76 +429,48 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
         />
       </div>
 
-      {/* 2. Navigation Tabs */}
-      <div className="border-b border-slate-200">
-        <div className="flex items-center gap-2 overflow-x-auto pb-px">
-          <button
-            type="button"
-            id="tab-profile-edit"
-            onClick={() => setActiveTab('profile')}
-            className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'profile'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <UserIcon className="w-4 h-4" />
-            <span>기본 정보 수정</span>
-          </button>
+      {/* 2. Section navigation (vertical on desktop) + content */}
+      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+        <nav
+          aria-label="설정 메뉴"
+          className="-mx-4 flex gap-1 overflow-x-auto border-b border-neutral-200 px-4 scrollbar-none lg:sticky lg:top-[88px] lg:mx-0 lg:flex-col lg:border-0 lg:px-0"
+        >
+          {(
+            [
+              { id: 'profile', domId: 'tab-profile-edit', label: '기본 정보', icon: UserIcon },
+              { id: 'decorations', domId: 'tab-profile-decorations', label: '업적 · 장식', icon: Palette },
+              { id: 'security', domId: 'tab-profile-security', label: '비밀번호 · 보안', icon: Shield },
+              { id: 'stats', domId: 'tab-profile-stats', label: '학습 현황', icon: BookOpen },
+            ] as const
+          ).map(({ id, domId, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                id={domId}
+                onClick={() => setActiveTab(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex shrink-0 items-center gap-2.5 whitespace-nowrap px-3 py-3 text-sm font-medium transition-colors cursor-pointer lg:rounded-lg lg:py-2.5 ${
+                  active ? 'text-neutral-900 lg:bg-white lg:shadow-xs lg:ring-1 lg:ring-neutral-200' : 'text-neutral-500 hover:text-neutral-900 lg:hover:bg-neutral-100'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                {id === 'decorations' && hasDecorationChanges && <span className="h-2 w-2 rounded-full bg-amber-500" />}
+                {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-neutral-900 lg:hidden" />}
+              </button>
+            );
+          })}
+        </nav>
 
-          <button
-            type="button"
-            id="tab-profile-decorations"
-            onClick={() => setActiveTab('decorations')}
-            className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'decorations'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Palette className="w-4 h-4" />
-            <span>업적 및 장식 설정</span>
-            {hasDecorationChanges && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            id="tab-profile-security"
-            onClick={() => setActiveTab('security')}
-            className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'security'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>비밀번호 및 보안</span>
-          </button>
-
-          <button
-            type="button"
-            id="tab-profile-stats"
-            onClick={() => setActiveTab('stats')}
-            className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'stats'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>학습 통계 및 수강 현황</span>
-          </button>
-        </div>
-      </div>
-
+        <div className="min-w-0 space-y-6">
       {/* Tab 1: Profile Edit */}
       {activeTab === 'profile' && (
         <div className="space-y-6">
           <form
             onSubmit={handleSaveProfile}
-            className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs"
+            className="bg-white border border-slate-200/80 rounded-xl p-6 sm:p-8"
           >
             <div className="max-w-2xl space-y-6">
               <div>
@@ -687,7 +657,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
       {activeTab === 'decorations' && (
         <div className="space-y-8">
           {/* Real-time Preview Banner Card */}
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="bg-white border border-slate-200/90 rounded-xl p-6 sm:p-8 space-y-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -1031,7 +1001,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
       {activeTab === 'security' && (
         <form
           onSubmit={handleChangePassword}
-          className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs"
+          className="bg-white border border-slate-200/80 rounded-xl p-6 sm:p-8"
         >
           <div className="max-w-xl space-y-6">
             <div>
@@ -1171,7 +1141,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
           </div>
 
           {/* Enrolled Courses List */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs">
+          <div className="bg-white border border-slate-200/80 rounded-xl p-6 sm:p-8">
             <h2 className="text-lg font-bold text-slate-900 mb-4">
               수강 신청 강의 목록 ({learningStats.enrolledDetails.length})
             </h2>
@@ -1239,6 +1209,9 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
           </div>
         </div>
       )}
+
+        </div>
+      </div>
 
       {/* Badge Title Edit Modal */}
       <BadgeTitleModal
