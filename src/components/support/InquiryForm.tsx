@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import { Inquiry, InquiryCategory, User } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { INQUIRY_CATEGORIES, INQUIRY_CONTENT_MAX, INQUIRY_TITLE_MAX, submitInquiry } from '../../services/inquiries';
+import { AttachmentPicker } from './AttachmentPicker';
 
 interface InquiryFormProps {
   /** Signed-in member. When missing, the form asks for a name and an email to reply to. */
@@ -30,8 +31,10 @@ export const InquiryForm: React.FC<InquiryFormProps> = ({ user, defaultCategory,
   const [email, setEmail] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [touched, setTouched] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadRatio, setUploadRatio] = useState<number | null>(null);
 
   const errors = {
     name: isGuest && name.trim().length < 2 ? '이름을 2자 이상 입력해 주세요.' : '',
@@ -55,6 +58,8 @@ export const InquiryForm: React.FC<InquiryFormProps> = ({ user, defaultCategory,
         userId: user?.id,
         userName: user ? user.name : name,
         userEmail: user ? user.email : email,
+        files,
+        onUploadProgress: files.length ? setUploadRatio : undefined,
       });
       onSubmitted(inquiry);
     } catch (error) {
@@ -62,6 +67,7 @@ export const InquiryForm: React.FC<InquiryFormProps> = ({ user, defaultCategory,
       showToast('문의를 보내지 못했어요. 잠시 후 다시 시도해 주세요.', 'error');
     } finally {
       setSending(false);
+      setUploadRatio(null);
     }
   };
 
@@ -156,6 +162,8 @@ export const InquiryForm: React.FC<InquiryFormProps> = ({ user, defaultCategory,
         {err('content')}
       </div>
 
+      <AttachmentPicker files={files} onChange={setFiles} disabled={sending} />
+
       <div className="flex flex-col-reverse gap-3 border-t border-neutral-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs leading-relaxed text-neutral-500">
           {isGuest ? '운영팀이 확인 후 입력한 이메일로 답변을 보내 드려요.' : `운영팀에 전달되며, 답변은 ‘내 문의 내역’에서 확인할 수 있어요. (${user!.email})`}
@@ -168,7 +176,7 @@ export const InquiryForm: React.FC<InquiryFormProps> = ({ user, defaultCategory,
           )}
           <button type="submit" disabled={sending} className="lms-btn lms-btn-primary flex-1 sm:flex-none">
             {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Send className="h-4 w-4" />}
-            문의 보내기
+            {sending && uploadRatio !== null && uploadRatio < 1 ? `파일 올리는 중 ${Math.round(uploadRatio * 100)}%` : '문의 보내기'}
           </button>
         </div>
       </div>

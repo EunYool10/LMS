@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Clock, FileText, Inbox, Mail, MessageSquareText, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, FileText, Inbox, Mail, MessageSquareText, Paperclip, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { storage } from '../services/storage';
 import { Inquiry } from '../types';
 import { InquiryForm } from '../components/support/InquiryForm';
 import { InquiryStatusBadge } from '../components/support/InquiryStatusBadge';
+import { InquiryAttachments } from '../components/support/InquiryAttachments';
 import { openPolicyModal } from '../components/common/PolicyModal';
 import {
   formatInquiryDate,
@@ -154,14 +155,20 @@ export const SupportPage: React.FC<{ initialTab?: Tab }> = ({ initialTab }) => {
                               <span className="tabular-nums">{formatInquiryDate(inq.createdAt)}</span>
                               {isNew && <span className="font-semibold text-rose-600">새 답변</span>}
                             </div>
-                            <p className="mt-1.5 truncate text-sm font-semibold text-neutral-900">{inq.title}</p>
+                            <p className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-neutral-900">
+                              <span className="truncate">{inq.title}</span>
+                              {!!inq.attachments?.length && <Paperclip className="h-3.5 w-3.5 shrink-0 text-neutral-400" aria-label="첨부파일 있음" />}
+                            </p>
                           </div>
                           <InquiryStatusBadge inquiry={inq} />
                           <ChevronDown className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                         </button>
                         {open && (
                           <div className="space-y-3 px-5 pb-5">
-                            <p className="whitespace-pre-wrap rounded-lg border border-neutral-200 px-4 py-3 text-sm leading-relaxed text-neutral-700">{inq.content}</p>
+                            <div className="space-y-3 rounded-lg border border-neutral-200 px-4 py-3">
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{inq.content}</p>
+                              <InquiryAttachments attachments={inq.attachments} />
+                            </div>
                             {inq.status === 'answered' && inq.answer ? (
                               <div className="rounded-lg border-l-[3px] border-brand-600 bg-brand-50/60 px-4 py-3">
                                 <p className="flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">

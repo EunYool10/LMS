@@ -913,6 +913,24 @@ export const firestoreService = {
     await deleteDoc(doc(db, 'system_settings', id));
   },
 
+  /** One base64 piece of an inquiry attachment (system_settings/inqfile_<attachmentId>_<index>). */
+  async saveInquiryFileChunk(id: string, chunk: { inquiryId: string; attachmentId: string; index: number; data: string }): Promise<void> {
+    await setDoc(doc(db, 'system_settings', id), { ...chunk, kind: 'inquiry_file' });
+  },
+
+  async getInquiryFileChunk(id: string): Promise<string | null> {
+    const snap = await getDoc(doc(db, 'system_settings', id));
+    return snap.exists() ? ((snap.data() as { data?: string }).data ?? null) : null;
+  },
+
+  async deleteInquiryFileChunks(ids: string[]): Promise<void> {
+    for (let i = 0; i < ids.length; i += 400) {
+      const batch = writeBatch(db);
+      ids.slice(i, i + 400).forEach((id) => batch.delete(doc(db, 'system_settings', id)));
+      await batch.commit();
+    }
+  },
+
   // Real-time listener for system announcements
   subscribeToSystemAnnouncements(callback: (announcements: SystemAnnouncement[]) => void): () => void {
     try {

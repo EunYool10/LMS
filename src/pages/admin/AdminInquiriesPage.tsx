@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Inbox, Mail, MessageSquareText, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Inbox, Mail, MessageSquareText, Paperclip, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Inquiry, InquiryCategory } from '../../types';
 import { AdminPageHeader, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { BaseModal } from '../../components/common/BaseModal';
 import { InquiryStatusBadge } from '../../components/support/InquiryStatusBadge';
+import { InquiryAttachments } from '../../components/support/InquiryAttachments';
 import {
   INQUIRY_CATEGORIES,
   answerInquiry,
@@ -109,7 +110,7 @@ export const AdminInquiriesPage: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteInquiry(deleteTarget.id);
+      await deleteInquiry(deleteTarget);
       setItems((prev) => prev.filter((i) => i.id !== deleteTarget.id));
       if (selectedId === deleteTarget.id) setSelectedId(null);
       showToast('문의를 삭제했어요.', 'success');
@@ -227,6 +228,7 @@ export const AdminInquiriesPage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {inq.status === 'open' && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-label="답변 대기" />}
                         <p className={`min-w-0 flex-1 truncate text-sm ${inq.status === 'open' ? 'font-semibold text-neutral-900' : 'font-medium text-neutral-700'}`}>{inq.title}</p>
+                        {!!inq.attachments?.length && <Paperclip className="h-3.5 w-3.5 shrink-0 text-neutral-400" aria-label="첨부파일 있음" />}
                         <span className="shrink-0 text-xs tabular-nums text-neutral-400">{formatRelative(inq.createdAt)}</span>
                       </div>
                       <p className="mt-1 truncate text-xs text-neutral-500">
@@ -284,6 +286,7 @@ export const AdminInquiriesPage: React.FC = () => {
 
               <div className="space-y-5 px-5 py-5 sm:px-6">
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-800">{selected.content}</p>
+                <InquiryAttachments key={selected.id} attachments={selected.attachments} />
 
                 <div className="border-t border-neutral-100 pt-5">
                   {!editing && selected.answer ? (
@@ -380,7 +383,7 @@ export const AdminInquiriesPage: React.FC = () => {
         }
       >
         <p className="text-sm leading-relaxed text-neutral-600">
-          「{deleteTarget?.title}」 문의와 답변이 영구히 삭제되고, 작성자의 문의 내역에서도 사라집니다.
+          「{deleteTarget?.title}」 문의와 답변{deleteTarget?.attachments?.length ? ', 첨부파일' : ''}이 영구히 삭제되고, 작성자의 문의 내역에서도 사라집니다.
         </p>
       </BaseModal>
     </div>

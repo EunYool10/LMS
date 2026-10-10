@@ -659,6 +659,7 @@ async function startServer() {
           fields: [
             { name: '유형', value: v('categoryLabel') },
             { name: '보낸 사람', value: v('userName') + (d.guest ? ' (비회원)' : '') },
+            ...(Number(d.attachments) > 0 ? [{ name: '첨부', value: `${Math.min(Number(d.attachments), 10)}개` }] : []),
           ],
           dedupeKey: `inquiry:${v('inquiryId')}`,
         };

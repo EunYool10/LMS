@@ -349,6 +349,16 @@ export interface Inquiry {
   answeredByName?: string;
   /** Set when the author opened the latest answer. */
   answerSeenAt?: string;
+  attachments?: InquiryAttachment[];
+}
+
+/** A file attached to an inquiry. Its bytes live in `chunks` Firestore docs (see services/inquiryFiles.ts). */
+export interface InquiryAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  chunks: number;
 }
 
 export interface ToastMessage {

@@ -3,6 +3,7 @@ import { firestoreService } from './firebase';
 import { Inquiry, InquiryCategory, User } from '../types';
 import { isAdminRole } from '../utils/rbac';
 import { notifyDiscord } from './discordNotify';
+import { deleteAttachments, uploadAttachments } from './inquiryFiles';
 
 export const INQUIRY_CATEGORIES: { id: InquiryCategory; label: string }[] = [
   { id: 'learning', label: '강의 · 학습' },
@@ -58,9 +59,14 @@ export async function submitInquiry(input: {
   userId?: string;
   userName: string;
   userEmail: string;
+  /** Already validated and prepared (see inquiryFiles.prepareAttachment). */
+  files?: File[];
+  onUploadProgress?: (ratio: number) => void;
 }): Promise<Inquiry> {
+  const id = `inquiry_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const attachments = input.files?.length ? await uploadAttachments(id, input.files, input.onUploadProgress) : undefined;
   const inquiry: Inquiry = {
-    id: `inquiry_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id,
     category: input.category,
     title: input.title.trim().slice(0, INQUIRY_TITLE_MAX),
     content: input.content.trim().slice(0, INQUIRY_CONTENT_MAX),
@@ -69,8 +75,14 @@ export async function submitInquiry(input: {
     userName: input.userName.trim(),
     userEmail: input.userEmail.trim().toLowerCase(),
     createdAt: new Date().toISOString(),
+    attachments,
   };
-  await firestoreService.saveInquiry(inquiry);
+  try {
+    await firestoreService.saveInquiry(inquiry);
+  } catch (err) {
+    deleteAttachments(attachments).catch(() => {});
+    throw err;
+  }
   notifyUpdated();
   notifyDiscord('inquiry', {
     inquiryId: inquiry.id,
@@ -78,6 +90,7 @@ export async function submitInquiry(input: {
     categoryLabel: inquiryCategoryLabel(inquiry.category),
     userName: inquiry.userName,
     guest: !inquiry.userId,
+    attachments: attachments?.length || 0,
   });
   return inquiry;
 }
@@ -105,8 +118,9 @@ export async function markAnswerSeen(id: string): Promise<string> {
   return answerSeenAt;
 }
 
-export async function deleteInquiry(id: string): Promise<void> {
-  await firestoreService.deleteInquiry(id);
+export async function deleteInquiry(inquiry: Inquiry): Promise<void> {
+  await firestoreService.deleteInquiry(inquiry.id);
+  await deleteAttachments(inquiry.attachments).catch(() => {});
   notifyUpdated();
 }
 
