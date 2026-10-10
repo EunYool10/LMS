@@ -1,20 +1,10 @@
 import React, { useState } from 'react';
 import { StudentAnalyticsTable } from '../../components/admin/StudentAnalyticsTable';
 import { CourseCompletionReport } from '../../components/admin/CourseCompletionReport';
+import { AdminPageHeader, AdminPanel, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { storage } from '../../services/storage';
 import { useToast } from '../../context/ToastContext';
-import {
-  Users,
-  CheckCircle2,
-  Award,
-  BarChart2,
-  Layers,
-  FileText,
-  AlertCircle,
-  TrendingUp,
-  Download,
-  Search,
-} from 'lucide-react';
+import { Download } from 'lucide-react';
 
 export const AdminAnalyticsPage: React.FC = () => {
   const { showToast } = useToast();
@@ -194,239 +184,127 @@ export const AdminAnalyticsPage: React.FC = () => {
     return Object.values(catMap).sort((a, b) => b.count - a.count);
   }, [enrollments, courses]);
 
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">학습 현황</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            과정별 이수율과 수강생 진도, 평가 결과를 확인합니다.
-          </p>
-        </div>
+  const completionRate =
+    analytics.totalEnrollments > 0 ? Math.round((analytics.completedEnrollmentsCount / analytics.totalEnrollments) * 100) : 0;
+  const tiers = progressDistribution
+    ? [
+        { label: '수료 (100%)', value: progressDistribution.completed, color: 'bg-emerald-500' },
+        { label: '76–99%', value: progressDistribution.tier4, color: 'bg-brand-600' },
+        { label: '51–75%', value: progressDistribution.tier3, color: 'bg-brand-400' },
+        { label: '26–50%', value: progressDistribution.tier2, color: 'bg-amber-400' },
+        { label: '0–25%', value: progressDistribution.tier1, color: 'bg-neutral-300' },
+      ]
+    : [];
+  const maxCategory = Math.max(1, ...categoryStats.map((c) => c.count));
 
-        <div className="flex items-center gap-3 flex-wrap">
+  return (
+    <div className="min-w-0 space-y-6">
+      <AdminPageHeader
+        title="학습 현황"
+        description="과정별 이수율과 수강생 진도, 평가 결과를 확인합니다."
+        actions={
           <button
             type="button"
             id="btn-export-analytics-csv"
             onClick={handleExportCSV}
-            className="lms-btn lms-btn-secondary lms-btn-sm"
-            title="강의별 이수율 및 수강생 활동 지표 CSV 다운로드"
+            className="lms-btn lms-btn-secondary"
+            title="강의별 이수율과 수강생 기록 CSV 다운로드"
           >
-            <Download className="w-4 h-4" />
-            <span>CSV 내보내기</span>
+            <Download className="h-4 w-4" />
+            CSV 내보내기
           </button>
+        }
+      />
 
-          <div className="inline-flex rounded-lg bg-neutral-100 p-1" role="tablist">
-            {(
-              [
-                { id: 'completion', label: '과정별 이수' },
-                { id: 'records', label: '수강생 기록' },
-                { id: 'statistics', label: '통계' },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer ${
-                  activeTab === t.id ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <AdminStatStrip
+        stats={[
+          { label: '수강 등록', value: `${analytics.totalEnrollments}건` },
+          { label: '수료', value: `${analytics.completedEnrollmentsCount}건`, hint: `이수율 ${completionRate}%` },
+          { label: '퀴즈 · 평가 응시', value: `${analytics.totalAttempts}회` },
+          {
+            label: '평균 점수',
+            value: analytics.totalAttempts === 0 ? '-' : `${analytics.averageScore}점`,
+            hint: analytics.totalAttempts === 0 ? '응시 기록 없음' : undefined,
+          },
+        ]}
+      />
+
+      <div role="tablist" className="flex gap-1 border-b border-neutral-200">
+        {(
+          [
+            { id: 'completion', label: '과정별 이수' },
+            { id: 'records', label: '수강생 기록' },
+            { id: 'statistics', label: '분포' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`relative px-3 pb-3 pt-1 text-sm font-medium cursor-pointer ${
+              activeTab === t.id ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'
+            }`}
+          >
+            {t.label}
+            {activeTab === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-neutral-900" />}
+          </button>
+        ))}
       </div>
 
-      {/* Top Metrics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">총 수강 등록</span>
-            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-              <Users className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">
-            {analytics.totalEnrollments}건
-          </div>
-          <div className="text-[11px] text-slate-400">누적 수강 등록 건수</div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">과정 이수 완료</span>
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-emerald-600 tabular-nums">
-            {analytics.completedEnrollmentsCount}건
-          </div>
-          <div className="text-[11px] text-slate-400">
-            {analytics.totalEnrollments > 0
-              ? `이수율 ${Math.round((analytics.completedEnrollmentsCount / analytics.totalEnrollments) * 100)}%`
-              : '수강 등록 대기'}
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">총 퀴즈 응시</span>
-            <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-              <FileText className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">
-            {analytics.totalAttempts}회
-          </div>
-          <div className="text-[11px] text-slate-400">평가 시험 및 퀴즈 응시</div>
-        </div>
-
-        {/* Average score adhering strictly to No-Data Rule */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">평균 시험 성적</span>
-            <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600">
-              <Award className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          {analytics.totalAttempts === 0 ? (
-            <div className="text-xl font-bold text-slate-400">데이터 없음</div>
-          ) : (
-            <div className="text-2xl font-bold text-purple-600 tabular-nums">
-              {analytics.averageScore}점
-            </div>
-          )}
-          <div className="text-[11px] text-slate-400">
-            {analytics.totalAttempts === 0 ? '퀴즈 응시 데이터가 없습니다.' : '전체 응시자 평균 점수'}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Tab Content */}
       {activeTab === 'completion' ? (
         <CourseCompletionReport />
       ) : activeTab === 'records' ? (
         <StudentAnalyticsTable />
+      ) : enrollments.length === 0 || !progressDistribution ? (
+        <div className="rounded-xl border border-neutral-200 bg-white px-6 py-14 text-center">
+          <p className="text-sm font-medium text-neutral-800">아직 집계할 학습 기록이 없습니다.</p>
+          <p className="mt-1 text-[13px] text-neutral-500">직원들이 강의를 수강하면 진도 분포와 카테고리별 수강 현황이 표시됩니다.</p>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {enrollments.length === 0 || !progressDistribution ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-              <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-sm font-bold text-slate-800">분석 데이터가 충분하지 않습니다.</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                아직 수강생의 학습 진도 및 응시 기록이 등록되지 않았습니다. 수강생이 강의를 수강하면 실시간 통계가 집계됩니다.
-              </p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <AdminPanel title="진도 분포" action={<span className="text-[13px] text-neutral-500">수강 {enrollments.length}건 기준</span>}>
+            <div className="flex h-3 overflow-hidden rounded-full bg-neutral-100">
+              {tiers.map((t) =>
+                t.value > 0 ? (
+                  <div key={t.label} className={t.color} style={{ width: `${(t.value / enrollments.length) * 100}%` }} title={`${t.label}: ${t.value}건`} />
+                ) : null
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Real Progress Tier Distribution */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-bold text-slate-900">학습 진도율 분포</h3>
-                  <span className="text-xs font-semibold text-indigo-600">
-                    완료율: {progressDistribution.completionRate}%
-                  </span>
-                </div>
+            <ul className="mt-4 space-y-2 text-sm">
+              {tiers.map((t) => (
+                <li key={t.label} className="flex items-center gap-2.5">
+                  <span className={`h-2.5 w-2.5 rounded-sm ${t.color}`} />
+                  <span className="flex-1 text-neutral-700">{t.label}</span>
+                  <span className="tabular-nums text-neutral-500">{Math.round((t.value / enrollments.length) * 100)}%</span>
+                  <span className="w-12 text-right font-medium tabular-nums text-neutral-900">{t.value}건</span>
+                </li>
+              ))}
+            </ul>
+          </AdminPanel>
 
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <div className="flex justify-between text-slate-700 mb-1">
-                      <span>수료 완료 (100%)</span>
-                      <span className="font-bold">{progressDistribution.completed}건</span>
+          <AdminPanel title="카테고리별 수강" action={<span className="text-[13px] text-neutral-500">수강생 수</span>}>
+            {categoryStats.length === 0 ? (
+              <p className="py-8 text-center text-sm text-neutral-500">수강 기록이 없습니다.</p>
+            ) : (
+              <ul className="space-y-3 text-sm">
+                {categoryStats.map((cat) => (
+                  <li key={cat.name} className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-700">{cat.name}</span>
+                      <span className="font-medium tabular-nums text-neutral-900">{cat.count}명</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-full rounded-full transition-all"
-                        style={{ width: `${(progressDistribution.completed / enrollments.length) * 100}%` }}
-                      />
+                    <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                      <div className="h-full rounded-full bg-brand-600" style={{ width: `${(cat.count / maxCategory) * 100}%` }} />
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-slate-700 mb-1">
-                      <span>상위 진행 (76% ~ 99%)</span>
-                      <span className="font-bold">{progressDistribution.tier4}건</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-indigo-500 h-full rounded-full transition-all"
-                        style={{ width: `${(progressDistribution.tier4 / enrollments.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-slate-700 mb-1">
-                      <span>중위 진행 (51% ~ 75%)</span>
-                      <span className="font-bold">{progressDistribution.tier3}건</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full rounded-full transition-all"
-                        style={{ width: `${(progressDistribution.tier3 / enrollments.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-slate-700 mb-1">
-                      <span>기초 진행 (26% ~ 50%)</span>
-                      <span className="font-bold">{progressDistribution.tier2}건</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-amber-500 h-full rounded-full transition-all"
-                        style={{ width: `${(progressDistribution.tier2 / enrollments.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-slate-700 mb-1">
-                      <span>학습 시작 (0% ~ 25%)</span>
-                      <span className="font-bold">{progressDistribution.tier1}건</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-slate-400 h-full rounded-full transition-all"
-                        style={{ width: `${(progressDistribution.tier1 / enrollments.length) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Real Category Enrollment Distribution */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-bold text-slate-900">카테고리별 수강 현황</h3>
-                  <span className="text-xs text-slate-400">실제 등록 강의 기준</span>
-                </div>
-
-                {categoryStats.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">등록된 수강 데이터가 없습니다.</div>
-                ) : (
-                  <div className="space-y-3 text-xs">
-                    {categoryStats.map((cat) => (
-                      <div key={cat.name} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
-                        <span className="font-medium text-slate-800">{cat.name}</span>
-                        <span className="font-bold text-slate-900 tabular-nums">{cat.count}명 수강</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AdminPanel>
         </div>
       )}
-
     </div>
   );
 };

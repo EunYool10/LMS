@@ -8,6 +8,7 @@ import { Badge } from '../common/Badge';
 import { Avatar } from '../common/Avatar';
 import { VerifiedBadge } from '../common/VerifiedBadge';
 import { Modal } from '../common/Modal';
+import { AdminPageHeader, AdminStatStrip } from './AdminPageHeader';
 import {
   ADMIN_ROLE_TAGS,
   ROLE_METADATA_MAP,
@@ -485,643 +486,425 @@ export const UserManager: React.FC = () => {
     ? TDSNTLMSStorage.PROTECTED_ADMIN_EMAILS.includes(selectedUser.email.toLowerCase())
     : false;
 
+  const adminCount = users.filter((u) => isAdminRole(u.role)).length;
+  const suspendedCount = users.filter((u) => u.status === 'SUSPENDED' || u.status === 'suspended').length;
+  const AUDIT_ACTION_LABELS: Record<string, string> = {
+    UPDATE_NAME: '이름 변경',
+    UPDATE_ROLE: '권한 변경',
+    UPDATE_STATUS: '상태 변경',
+    DELETE_USER: '사용자 삭제',
+    UPDATE_AVATAR: '사진 변경',
+    PASSWORD_CHANGE: '비밀번호 변경',
+    COURSE_CREATE: '강의 생성',
+    COURSE_UPDATE: '강의 수정',
+    COURSE_DELETE: '강의 삭제',
+    COURSE_ASSIGN: '수강 배정',
+    ANNOUNCEMENT_CREATE: '공지 등록',
+    ANNOUNCEMENT_UPDATE: '공지 수정',
+    ANNOUNCEMENT_DELETE: '공지 삭제',
+    BULK_UPDATE: '일괄 변경',
+    BULK_DELETE: '일괄 삭제',
+    QUESTION_CREATE: '문제 등록',
+    QUESTION_DELETE: '문제 삭제',
+    LEARNING_DATA_RESET: '학습 기록 초기화',
+  };
+  const statusBadge = (suspended: boolean) => (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${suspended ? 'text-rose-600' : 'text-emerald-700'}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${suspended ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+      {suspended ? '정지' : '활성'}
+    </span>
+  );
+  const roleBadge = (role: string) => (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+        isAdminRole(role as any) ? 'bg-brand-50 text-brand-700' : 'bg-neutral-100 text-neutral-600'
+      }`}
+    >
+      {isAdminRole(role as any) ? getRoleLabel(role as any) : '수강생'}
+    </span>
+  );
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-      {/* Top Header */}
-      <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-bold text-slate-900">사용자 및 계정 관리</h3>
-            {isSuperAdmin && (
-              <Badge variant="purple" size="sm">
-                서비스 총괄 전용 제어
-              </Badge>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            등록된 수강생과 관리자의 성명, 직책(TAG), 상태, 프로필 사진 및 학습 통계를 실시간으로 관리합니다.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            id="btn-add-new-user"
-            onClick={() => setIsAddModalOpen(true)}
-            className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>신규 계정 등록</span>
+    <div className="min-w-0 space-y-6">
+      <AdminPageHeader
+        title="사용자 · 권한"
+        description="직원 계정의 권한과 상태를 관리하고 관리자 작업 기록을 확인합니다."
+        actions={
+          <button type="button" id="btn-add-new-user" onClick={() => setIsAddModalOpen(true)} className="lms-btn lms-btn-primary">
+            <UserPlus className="h-4 w-4" />
+            계정 추가
           </button>
+        }
+      />
+
+      <AdminStatStrip
+        stats={[
+          { label: '전체 사용자', value: `${users.length}명` },
+          { label: '수강생', value: `${users.length - adminCount}명` },
+          { label: '관리자', value: `${adminCount}명` },
+          { label: '정지', value: `${suspendedCount}명` },
+        ]}
+      />
+
+      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <div role="tablist" className="flex gap-1 border-b border-neutral-200 px-3">
+          {(
+            [
+              { id: 'users', domId: 'tab-user-list', label: '사용자', count: users.length },
+              { id: 'audit', domId: 'tab-audit-logs', label: '작업 기록', count: auditLogs.length },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              id={t.domId}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.id}
+              onClick={() => {
+                setActiveTab(t.id);
+                if (t.id === 'audit') reloadData();
+              }}
+              className={`relative flex items-center gap-1.5 px-3 py-3 text-sm font-medium cursor-pointer ${
+                activeTab === t.id ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'
+              }`}
+            >
+              {t.label}
+              <span className="text-xs tabular-nums text-neutral-400">{t.count}</span>
+              {activeTab === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-neutral-900" />}
+            </button>
+          ))}
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-5 border-b border-slate-100 bg-slate-50/50">
-        <button
-          type="button"
-          id="tab-user-list"
-          onClick={() => setActiveTab('users')}
-          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-            activeTab === 'users'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <UsersIcon className="w-4 h-4" />
-          사용자 목록 ({users.length}명)
-        </button>
-
-        <button
-          type="button"
-          id="tab-audit-logs"
-          onClick={() => {
-            setActiveTab('audit');
-            reloadData();
-          }}
-          className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-            activeTab === 'audit'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          관리자 감사 로그 ({auditLogs.length}건)
-        </button>
-      </div>
-
-      {activeTab === 'users' && (
-        <>
-          {/* Filter Bar */}
-          <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              {/* Role Filter */}
-              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
-                {[
-                  { key: 'all', label: '전체' },
-                  { key: 'USER', label: '수강생' },
-                  { key: 'ADMINS', label: '전체 관리자' },
-                  { key: 'SERVICE_OWNER', label: '서비스 총괄' },
-                  { key: 'SECURITY_MANAGER', label: '보안 관리자' },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      setRoleFilter(key);
-                      setCurrentPage(1);
-                    }}
-                    className={`py-1 px-2.5 text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
-                      roleFilter === key
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Status Filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="py-1.5 px-3 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="all">전체 상태</option>
-                <option value="ACTIVE">정상 활성</option>
-                <option value="SUSPENDED">정지됨</option>
-              </select>
-
-              {/* Sort Order */}
-              <button
-                type="button"
-                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 flex items-center gap-1"
-                title="정렬 방향 토글"
-              >
-                <ArrowUpDown className="w-3.5 h-3.5" />
-                <span>{sortOrder === 'desc' ? '최신순' : '오래된순'}</span>
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="이름, 이메일, 닉네임, 연락처..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Bulk Action Bar */}
-          {selectedUserIds.length > 0 && (
-            <div className="p-3 mx-4 my-2 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-indigo-950 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-                  선택된 계정: <strong className="text-indigo-600 font-bold">{selectedUserIds.length}명</strong>
-                </span>
-                <span className="text-indigo-300">|</span>
+        {activeTab === 'users' && (
+          <>
+            {selectedUserIds.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 bg-brand-50/60 px-4 py-3">
+                <span className="text-sm font-medium text-neutral-900">{selectedUserIds.length}명 선택</span>
                 <button
                   type="button"
                   id="btn-clear-user-selection"
                   onClick={handleClearSelection}
-                  className="text-slate-500 hover:text-indigo-700 underline cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[13px] text-neutral-500 hover:text-neutral-900 cursor-pointer"
                 >
+                  <X className="h-3.5 w-3.5" />
                   선택 해제
                 </button>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  id="btn-bulk-activate-users"
-                  onClick={() => handleBulkStatusUpdate('ACTIVE')}
-                  className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>일괄 정상 활성화</span>
-                </button>
-                <button
-                  type="button"
-                  id="btn-bulk-suspend-users"
-                  onClick={() => handleBulkStatusUpdate('SUSPENDED')}
-                  className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Ban className="w-3.5 h-3.5" />
-                  <span>일괄 계정 정지</span>
-                </button>
-                <button
-                  type="button"
-                  id="btn-bulk-delete-users"
-                  onClick={() => setIsBulkDeleteModalOpen(true)}
-                  className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>일괄 계정 삭제</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Mobile Select-All Bar */}
-          <div className="md:hidden flex items-center justify-between p-3 bg-slate-50 border-b border-slate-100 text-xs text-slate-600">
-            <label className="flex items-center gap-2 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                id="checkbox-select-all-users-mobile"
-                checked={
-                  paginatedUsers.length > 0 &&
-                  paginatedUsers.every((u) => selectedUserIds.includes(u.id))
-                }
-                onChange={handleToggleSelectAll}
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-              />
-              <span>현재 목록 전체 선택 ({selectedUserIds.length}/{paginatedUsers.length})</span>
-            </label>
-            <span className="text-[11px] text-slate-400">총 {sortedUsers.length}명</span>
-          </div>
-
-          {/* Mobile User Cards (< md) */}
-          <div className="md:hidden divide-y divide-slate-100">
-            {paginatedUsers.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                검색 조건과 일치하는 사용자가 없습니다.
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <button type="button" id="btn-bulk-activate-users" onClick={() => handleBulkStatusUpdate('ACTIVE')} className="lms-btn lms-btn-secondary lms-btn-sm">
+                    <CheckCircle2 className="h-4 w-4" />
+                    활성화
+                  </button>
+                  <button type="button" id="btn-bulk-suspend-users" onClick={() => handleBulkStatusUpdate('SUSPENDED')} className="lms-btn lms-btn-secondary lms-btn-sm">
+                    <Ban className="h-4 w-4" />
+                    정지
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-bulk-delete-users"
+                    onClick={() => setIsBulkDeleteModalOpen(true)}
+                    className="lms-btn lms-btn-sm border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    삭제
+                  </button>
+                </div>
               </div>
             ) : (
-              paginatedUsers.map((u) => {
-                const isProtected = TDSNTLMSStorage.PROTECTED_ADMIN_EMAILS.includes(
-                  u.email.toLowerCase()
-                );
+              <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 lg:flex-row lg:items-center">
+                <div className="relative lg:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="이름, 이메일, 연락처 검색"
+                    aria-label="사용자 검색"
+                    className="lms-input h-9 pl-9"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => {
+                      setRoleFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    aria-label="권한"
+                    className="lms-input h-9 w-auto pr-8"
+                  >
+                    <option value="all">전체 권한</option>
+                    <option value="USER">수강생</option>
+                    <option value="ADMINS">관리자 전체</option>
+                    <option value="SERVICE_OWNER">서비스 총괄</option>
+                    <option value="SECURITY_MANAGER">보안 관리자</option>
+                  </select>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    aria-label="상태"
+                    className="lms-input h-9 w-auto pr-8"
+                  >
+                    <option value="all">전체 상태</option>
+                    <option value="ACTIVE">활성</option>
+                    <option value="SUSPENDED">정지</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3 lg:ml-auto">
+                  <span className="text-[13px] tabular-nums text-neutral-500">{sortedUsers.length}명</span>
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="lms-btn lms-btn-secondary lms-btn-sm"
+                    title="가입일 정렬"
+                  >
+                    <ArrowUpDown className="h-4 w-4" />
+                    {sortOrder === 'desc' ? '최근 가입순' : '오래된 순'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile list */}
+            <ul className="divide-y divide-neutral-100 md:hidden">
+              <li className="flex items-center gap-2 bg-neutral-50 px-4 py-2 text-[13px] text-neutral-600">
+                <input
+                  type="checkbox"
+                  id="checkbox-select-all-users-mobile"
+                  checked={paginatedUsers.length > 0 && paginatedUsers.every((u) => selectedUserIds.includes(u.id))}
+                  onChange={handleToggleSelectAll}
+                  className="h-4 w-4 accent-brand-600"
+                  aria-label="전체 선택"
+                />
+                이 페이지 전체 선택
+              </li>
+              {paginatedUsers.length === 0 && <li className="py-12 text-center text-sm text-neutral-500">조건에 맞는 사용자가 없습니다.</li>}
+              {paginatedUsers.map((u) => {
+                const isProtected = TDSNTLMSStorage.PROTECTED_ADMIN_EMAILS.includes(u.email.toLowerCase());
                 const isSuspended = u.status === 'SUSPENDED' || u.status === 'suspended';
                 const isSelf = u.id === currentUser?.id;
                 const isSelected = selectedUserIds.includes(u.id);
-
                 return (
-                  <div
-                    key={`mobile-user-${u.id}`}
-                    className={`p-4 transition-colors ${
-                      isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/70'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Checkbox */}
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleSelectUser(u.id)}
-                        className="mt-1 w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-
-                      {/* Avatar & Main Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar user={u} size="md" showRoleBadge={false} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-sm text-slate-900 truncate">
-                                {u.name}
-                              </span>
-                              <VerifiedBadge role={u.role} size="xs" className="shrink-0" />
-                              {isSelf && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-indigo-50 text-indigo-700 font-semibold">
-                                  본인
-                                </span>
-                              )}
-                              {isProtected && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-purple-50 text-purple-700 font-semibold">
-                                  보호
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{u.email}</p>
-                          </div>
-                        </div>
-
-                        {/* Badges & Meta info */}
-                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                          {(() => {
-                            const meta = getRoleMetadata(u.role);
-                            if (meta) {
-                              return (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold ${meta.badgeClass}`}
-                                >
-                                  <span>{meta.icon}</span>
-                                  <span>{meta.label}</span>
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                수강생
-                              </span>
-                            );
-                          })()}
-
-                          {isSuspended ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-rose-100 text-rose-700 border border-rose-200">
-                              <Ban className="w-3 h-3" />
-                              정지됨
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3" />
-                              정상 활성
-                            </span>
-                          )}
-
-                          {u.phone && (
-                            <span className="text-slate-500 font-mono text-[11px]">
-                              {u.phone}
-                            </span>
-                          )}
-                          <span className="text-slate-400 text-[10px]">
-                            가입: {new Date(u.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-
-                        {/* Mobile Action Buttons */}
-                        <div className="mt-3 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDrawer(u)}
-                            className="flex-1 min-h-[40px] px-3 py-2 bg-indigo-50 active:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            <span>상세 및 수정</span>
-                          </button>
-
-                          {!isProtected && !isSelf && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(u)}
-                              className="min-h-[40px] px-3 py-2 text-rose-600 active:bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              <span>삭제</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Desktop Users Table (>= md) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-                <tr>
-                  <th className="py-3 px-3 w-10 text-center">
+                  <li key={u.id} className={`flex items-start gap-3 px-4 py-3 ${isSelected ? 'bg-brand-50/40' : ''}`}>
                     <input
                       type="checkbox"
-                      id="checkbox-select-all-users"
-                      checked={
-                        paginatedUsers.length > 0 &&
-                        paginatedUsers.every((u) => selectedUserIds.includes(u.id))
-                      }
-                      onChange={handleToggleSelectAll}
-                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      title="현재 페이지 전체 선택/해제"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelectUser(u.id)}
+                      className="mt-2.5 h-4 w-4 shrink-0 accent-brand-600"
+                      aria-label={`${u.name} 선택`}
                     />
-                  </th>
-                  <th className="py-3 px-4">사용자</th>
-                  <th className="py-3 px-4">권한 (Role)</th>
-                  <th className="py-3 px-4">상태</th>
-                  <th className="py-3 px-4">연락처 / 닉네임</th>
-                  <th className="py-3 px-4">가입일시</th>
-                  <th className="py-3 px-4 text-right">관리 작업</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {paginatedUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      검색 조건과 일치하는 사용자가 없습니다.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedUsers.map((u) => {
-                    const isProtected = TDSNTLMSStorage.PROTECTED_ADMIN_EMAILS.includes(
-                      u.email.toLowerCase()
-                    );
-                    const isSuspended = u.status === 'SUSPENDED' || u.status === 'suspended';
-                    const isSelf = u.id === currentUser?.id;
-                    const isSelected = selectedUserIds.includes(u.id);
-
-                    return (
-                      <tr
-                        key={u.id}
-                        className={`hover:bg-slate-50/80 transition-colors group cursor-pointer ${
-                          isSelected ? 'bg-indigo-50/40' : ''
-                        }`}
-                        onClick={() => handleOpenDrawer(u)}
+                    <button type="button" onClick={() => handleOpenDrawer(u)} className="flex min-w-0 flex-1 items-start gap-3 text-left cursor-pointer">
+                      <Avatar user={u} size="md" />
+                      <span className="min-w-0 flex-1 space-y-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-neutral-900">{u.name}</span>
+                          {isSelf && <span className="text-xs text-brand-700">나</span>}
+                          {isProtected && <span className="text-xs text-neutral-400">보호</span>}
+                        </span>
+                        <span className="block truncate text-xs text-neutral-500">{u.email}</span>
+                        <span className="flex items-center gap-2">
+                          {roleBadge(u.role)}
+                          {statusBadge(isSuspended)}
+                        </span>
+                      </span>
+                    </button>
+                    {!isProtected && !isSelf && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(u)}
+                        className="rounded-md p-1.5 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                        aria-label={`${u.name} 삭제`}
                       >
-                        {/* Checkbox column */}
-                        <td
-                          className="py-3 px-3 w-10 text-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelectUser(u.id)}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
-                        </td>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
 
-                        {/* User Identity */}
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar user={u} size="sm" showRoleBadge={false} />
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                  {u.name}
-                                </span>
-                                <VerifiedBadge role={u.role} size="xs" className="shrink-0" />
-                                {isSelf && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-indigo-50 text-indigo-700 font-semibold">
-                                    본인
-                                  </span>
-                                )}
-                                {isProtected && (
-                                  <span
-                                    className="text-[10px] px-1.5 py-0.5 rounded-sm bg-purple-50 text-purple-700 font-semibold"
-                                    title="시스템 보호 관리자 계정"
-                                  >
-                                    보호 계정
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] text-slate-400">{u.email}</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono">ID: {u.id}</span>
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full whitespace-nowrap text-left text-sm">
+                <thead className="border-b border-neutral-200 bg-neutral-50 text-xs text-neutral-500">
+                  <tr>
+                    <th className="w-10 px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        id="checkbox-select-all-users"
+                        checked={paginatedUsers.length > 0 && paginatedUsers.every((u) => selectedUserIds.includes(u.id))}
+                        onChange={handleToggleSelectAll}
+                        className="h-4 w-4 accent-brand-600"
+                        aria-label="이 페이지 전체 선택"
+                      />
+                    </th>
+                    <th className="px-3 py-2.5 font-medium">사용자</th>
+                    <th className="px-3 py-2.5 font-medium">권한</th>
+                    <th className="px-3 py-2.5 font-medium">상태</th>
+                    <th className="px-3 py-2.5 font-medium">연락처</th>
+                    <th className="px-3 py-2.5 font-medium">가입일</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                  {paginatedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-neutral-500">
+                        조건에 맞는 사용자가 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedUsers.map((u) => {
+                      const isProtected = TDSNTLMSStorage.PROTECTED_ADMIN_EMAILS.includes(u.email.toLowerCase());
+                      const isSuspended = u.status === 'SUSPENDED' || u.status === 'suspended';
+                      const isSelf = u.id === currentUser?.id;
+                      const isSelected = selectedUserIds.includes(u.id);
+                      return (
+                        <tr
+                          key={u.id}
+                          onClick={() => handleOpenDrawer(u)}
+                          className={`cursor-pointer ${isSelected ? 'bg-brand-50/40' : 'hover:bg-neutral-50'}`}
+                        >
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectUser(u.id)}
+                              className="h-4 w-4 accent-brand-600"
+                              aria-label={`${u.name} 선택`}
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-3">
+                              <Avatar user={u} size="sm" />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-neutral-900">{u.name}</span>
+                                  {isSelf && <span className="text-xs text-brand-700">나</span>}
+                                  {isProtected && (
+                                    <span className="text-xs text-neutral-400" title="삭제할 수 없는 기본 관리자 계정">
+                                      보호
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-neutral-500">{u.email}</div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-
-                        {/* Role */}
-                        <td className="py-3 px-4">
-                          {(() => {
-                            const meta = getRoleMetadata(u.role);
-                            if (meta) {
-                              return (
-                                <span
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${meta.badgeClass}`}
-                                >
-                                  <span>{meta.icon}</span>
-                                  <span>{meta.label}</span>
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                수강생
-                              </span>
-                            );
-                          })()}
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-3 px-4">
-                          {isSuspended ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-700 border border-rose-200">
-                              <Ban className="w-3 h-3" />
-                              정지됨
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3" />
-                              정상 활성
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Contact / Nickname */}
-                        <td className="py-3 px-4 text-slate-500">
-                          <div>
-                            <span>{u.phone || '-'}</span>
-                            {u.nickname && (
-                              <p className="text-[11px] text-slate-400">별칭: {u.nickname}</p>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Registered At */}
-                        <td className="py-3 px-4 text-slate-400">
-                          {new Date(u.createdAt).toLocaleDateString()}
-                        </td>
-
-                        {/* Action buttons */}
-                        <td
-                          className="py-3 px-4 text-right"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDrawer(u)}
-                              className="px-2.5 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
-                              title="상세 정보 및 이름/권한 수정"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>수정/상세</span>
-                            </button>
-
-                            {!isProtected && !isSelf && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteUser(u)}
-                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="사용자 삭제"
-                              >
-                                <Trash2 className="w-4 h-4" />
+                          </td>
+                          <td className="px-3 py-3">{roleBadge(u.role)}</td>
+                          <td className="px-3 py-3">{statusBadge(isSuspended)}</td>
+                          <td className="px-3 py-3 text-neutral-500">{u.phone || '-'}</td>
+                          <td className="px-3 py-3 tabular-nums text-neutral-500">{new Date(u.createdAt).toLocaleDateString('ko-KR')}</td>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button type="button" onClick={() => handleOpenDrawer(u)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                                <Edit3 className="h-4 w-4" />
+                                관리
                               </button>
-                            )}
-                          </div>
+                              {!isProtected && !isSelf && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(u)}
+                                  className="rounded-md p-1.5 text-neutral-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                                  title="사용자 삭제"
+                                  aria-label={`${u.name} 삭제`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-col items-center justify-between gap-3 border-t border-neutral-200 px-4 py-3 text-[13px] text-neutral-500 sm:flex-row">
+              <span>
+                {sortedUsers.length}명 중 {sortedUsers.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
+                {Math.min(currentPage * itemsPerPage, sortedUsers.length)}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="lms-btn lms-btn-ghost lms-btn-sm px-2"
+                  aria-label="이전 페이지"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="px-2 tabular-nums text-neutral-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="lms-btn lms-btn-ghost lms-btn-sm px-2"
+                  aria-label="다음 페이지"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'audit' && (
+          <div>
+            <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
+              <p className="text-[13px] text-neutral-500">권한 변경, 계정 조치, 강의·공지 작업 등 관리자 작업이 기록됩니다.</p>
+              <button type="button" onClick={reloadData} className="lms-btn lms-btn-secondary lms-btn-sm">
+                <History className="h-4 w-4" />
+                새로고침
+              </button>
+            </div>
+            {auditLogs.length === 0 ? (
+              <p className="py-16 text-center text-sm text-neutral-500">기록된 작업이 없습니다.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full whitespace-nowrap text-left text-sm">
+                  <thead className="border-b border-neutral-200 bg-neutral-50 text-xs text-neutral-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-medium">일시</th>
+                      <th className="px-3 py-2.5 font-medium">작업자</th>
+                      <th className="px-3 py-2.5 font-medium">작업</th>
+                      <th className="px-3 py-2.5 font-medium">대상</th>
+                      <th className="px-4 py-2.5 font-medium">내용</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="px-4 py-2.5 tabular-nums text-neutral-500">{new Date(log.timestamp).toLocaleString('ko-KR')}</td>
+                        <td className="px-3 py-2.5 font-medium text-neutral-900">{log.actorName}</td>
+                        <td className="px-3 py-2.5">
+                          <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                            {AUDIT_ACTION_LABELS[log.action] || log.action}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">{log.targetUserName || log.targetCourseTitle || log.targetAnnouncementTitle || '-'}</td>
+                        <td className="max-w-[420px] truncate px-4 py-2.5 text-neutral-600" title={log.details}>
+                          {log.details}
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <div>
-              전체 <strong className="text-slate-800">{sortedUsers.length}</strong>명 중{' '}
-              <strong className="text-slate-800">
-                {sortedUsers.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
-              </strong>
-              -
-              <strong className="text-slate-800">
-                {Math.min(currentPage * itemsPerPage, sortedUsers.length)}
-              </strong>
-              명 표시
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <span className="px-3 py-1 font-semibold text-slate-700">
-                {currentPage} / {totalPages}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Audit Logs Tab */}
-      {activeTab === 'audit' && (
-        <div>
-          <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-800">보안 감사 및 관리자 직책 변경 이력</p>
-              <p className="text-[11px] text-slate-500">
-                서버측 RBAC 검증을 거친 관리자 직책(TAG) 부여, 정보 변경 및 계정 조치 이력이 실시간으로 기록됩니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={reloadData}
-              className="py-1.5 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <History className="w-3.5 h-3.5 text-slate-500" />
-              <span>새로고침</span>
-            </button>
-          </div>
-
-          <div className="divide-y divide-slate-100 text-xs overflow-x-auto">
-            <div className="p-3.5 bg-slate-100/70 font-bold text-slate-600 grid grid-cols-12 gap-2 min-w-[700px]">
-              <span className="col-span-3">일시</span>
-              <span className="col-span-2">수행 관리자</span>
-              <span className="col-span-2">대상 사용자</span>
-              <span className="col-span-2">조치 액션</span>
-              <span className="col-span-3">상세 내용</span>
-            </div>
-
-            {auditLogs.length === 0 ? (
-              <div className="py-16 text-center text-slate-400">
-                기록된 관리자 감사 로그가 없습니다.
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              auditLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className={`p-3.5 grid grid-cols-12 gap-2 hover:bg-slate-50/70 items-center min-w-[700px] transition-colors ${
-                    log.action === 'UPDATE_ROLE' ? 'bg-indigo-50/20' : ''
-                  }`}
-                >
-                  <span className="col-span-3 text-slate-500 font-mono text-[11px]">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </span>
-                  <span className="col-span-2 font-bold text-slate-800 flex items-center gap-1">
-                    <Shield className="w-3 h-3 text-indigo-600 shrink-0" />
-                    <span className="truncate">{log.actorName}</span>
-                  </span>
-                  <span className="col-span-2 font-semibold text-slate-700 truncate">{log.targetUserName}</span>
-                  <span className="col-span-2">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                        log.action === 'UPDATE_ROLE'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                          : log.action === 'UPDATE_NAME'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : log.action === 'UPDATE_STATUS'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : log.action === 'DELETE_USER'
-                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                          : 'bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}
-                    >
-                      {log.action === 'UPDATE_ROLE' && <Sparkles className="w-3 h-3 text-purple-600" />}
-                      <span>{log.action}</span>
-                    </span>
-                  </span>
-                  <span className="col-span-3 text-slate-600 font-medium truncate" title={log.details}>
-                    {log.details}
-                  </span>
-                </div>
-              ))
             )}
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
       {/* User Detail & Edit Drawer */}
       <AnimatePresence>

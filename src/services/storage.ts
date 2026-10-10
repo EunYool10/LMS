@@ -707,6 +707,7 @@ export class TDSNTLMSStorage {
       // 7. Sync Platform Settings
       const remoteSettings = await firestoreService.getSettings();
       if (remoteSettings) {
+        this.applyLearningDataReset(remoteSettings.learningDataResetAt);
         this.set(STORAGE_KEYS.SETTINGS, remoteSettings);
       } else {
         const localSettings = this.getSettings();
@@ -729,6 +730,56 @@ export class TDSNTLMSStorage {
     } catch (e) {
       console.warn('[Storage] syncFromFirestore error:', e);
     }
+  }
+
+  private static readonly LEARNING_RESET_SEEN_KEY = 'tdsnt_learning_reset_seen_v2';
+
+  /** Clears enrollments, lesson progress and quiz attempts cached in this browser. */
+  private wipeLocalLearningData(): void {
+    this.set(STORAGE_KEYS.ENROLLMENTS, []);
+    this.set(STORAGE_KEYS.PROGRESS, []);
+    this.set(STORAGE_KEYS.QUIZ_ATTEMPTS, []);
+    const courses = this.get<Course[]>(STORAGE_KEYS.COURSES, []).map((c) => ({ ...c, enrolledCount: 0 }));
+    this.set(STORAGE_KEYS.COURSES, courses);
+  }
+
+  /** If an admin reset learning data after this browser last saw one, drop the local copies once. */
+  private applyLearningDataReset(resetAt?: string): void {
+    if (!resetAt || typeof localStorage === 'undefined') return;
+    const seen = localStorage.getItem(TDSNTLMSStorage.LEARNING_RESET_SEEN_KEY);
+    if (seen && new Date(seen).getTime() >= new Date(resetAt).getTime()) return;
+    this.wipeLocalLearningData();
+    localStorage.setItem(TDSNTLMSStorage.LEARNING_RESET_SEEN_KEY, resetAt);
+  }
+
+  /**
+   * Admin action: delete every enrollment, lesson progress record and certificate (local + Firestore),
+   * reset course enrollment counts, and publish a reset marker so other browsers clear their caches.
+   */
+  public async resetAllLearningData(actor?: { id: string; name: string }): Promise<{ enrollments: number; progress: number; certificates: number }> {
+    const [enrollments, progress, certificates] = await Promise.all([
+      firestoreService.deleteAllDocs('enrollments'),
+      firestoreService.deleteAllDocs('progress'),
+      firestoreService.deleteAllDocs('certificates'),
+    ]);
+    this.wipeLocalLearningData();
+    this.get<Course[]>(STORAGE_KEYS.COURSES, []).forEach((c) => {
+      firestoreService.saveCourse({ ...c, enrolledCount: 0 }).catch(() => {});
+    });
+    const resetAt = new Date().toISOString();
+    const settings = { ...this.getSettings(), learningDataResetAt: resetAt };
+    this.set(STORAGE_KEYS.SETTINGS, settings);
+    await firestoreService.saveSettings(settings);
+    localStorage.setItem(TDSNTLMSStorage.LEARNING_RESET_SEEN_KEY, resetAt);
+    if (actor) {
+      this.addAuditLog({
+        actorId: actor.id,
+        actorName: actor.name,
+        action: 'LEARNING_DATA_RESET',
+        details: `수강 ${enrollments}건, 진도 ${progress}건, 수료증 ${certificates}건 초기화`,
+      });
+    }
+    return { enrollments, progress, certificates };
   }
 
   /** Course progress % from lesson progress: completed lessons count 100, partial ones proportionally. */

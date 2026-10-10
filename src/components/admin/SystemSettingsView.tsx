@@ -5,44 +5,99 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/authApi';
 import { openPolicyModal } from '../common/PolicyModal';
-import {
-  Settings,
-  Bell,
-  Database,
-  Save,
-  RotateCcw,
-  ShieldCheck,
-  KeyRound,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  Lock,
-  FileText,
-  ExternalLink,
-} from 'lucide-react';
+import { AdminPageHeader } from './AdminPageHeader';
+import { BaseModal } from '../common/BaseModal';
+import { AlertTriangle, Check, Copy, Database, ExternalLink, Eye, EyeOff, KeyRound, Lock, LogIn, Save, Settings, ShieldCheck } from 'lucide-react';
+
+type Section = 'general' | 'access' | 'social' | 'admins' | 'data';
+
+const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'general', label: '일반', icon: Settings },
+  { id: 'access', label: '접근 · 보안', icon: ShieldCheck },
+  { id: 'social', label: '소셜 로그인', icon: LogIn },
+  { id: 'admins', label: '관리자 계정', icon: KeyRound },
+  { id: 'data', label: '데이터 관리', icon: Database },
+];
+
+const RESET_CONFIRM_WORD = '초기화';
+
+const Field: React.FC<{ label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }> = ({
+  label,
+  hint,
+  action,
+  children,
+}) => (
+  <div className="space-y-1.5">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[13px] font-medium text-neutral-800">{label}</span>
+      {action}
+    </div>
+    {children}
+    {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+  </div>
+);
+
+const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; danger?: boolean }> = ({
+  checked,
+  onChange,
+  label,
+  danger,
+}) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={label}
+    onClick={() => onChange(!checked)}
+    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+      checked ? (danger ? 'bg-rose-500' : 'bg-brand-600') : 'bg-neutral-300'
+    }`}
+  >
+    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-xs transition-all ${checked ? 'left-[22px]' : 'left-0.5'}`} />
+  </button>
+);
+
+const SettingRow: React.FC<{ title: string; desc: string; children: React.ReactNode }> = ({ title, desc, children }) => (
+  <div className="flex items-center justify-between gap-6 py-4">
+    <div>
+      <p className="text-sm font-medium text-neutral-900">{title}</p>
+      <p className="mt-0.5 text-[13px] text-neutral-500">{desc}</p>
+    </div>
+    {children}
+  </div>
+);
 
 export const SystemSettingsView: React.FC = () => {
   const { showToast } = useToast();
   const { user, isSuperAdmin } = useAuth();
+  const [section, setSection] = useState<Section>('general');
   const [settings, setSettings] = useState<SystemSettings>(() => storage.getSettings());
+  const [isDirty, setIsDirty] = useState(false);
 
-  // Password change form state
   const [targetAdminEmail, setTargetAdminEmail] = useState(user?.email || 'teamdevstudiont@gmail.com');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [isChangingPw, setIsChangingPw] = useState(false);
 
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
   const allowedAdmins = [
-    { email: 'teamdevstudiont@gmail.com', name: 'TDSNTLMS', role: 'SUPER_ADMIN' },
-    { email: 'eunyool100208@gmail.com', name: '은율', role: 'SUPER_ADMIN' },
-    { email: 'ayun24song@gmail.com', name: '윤아', role: 'SUPER_ADMIN' },
+    { email: 'teamdevstudiont@gmail.com', name: 'TDSNTLMS' },
+    { email: 'eunyool100208@gmail.com', name: '은율' },
+    { email: 'deer123424@gmail.com', name: '은율' },
+    { email: 'ayun24song@gmail.com', name: '윤아' },
   ];
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const update = (patch: Partial<SystemSettings>) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
+    setIsDirty(true);
+  };
+
+  const handleSave = async () => {
     storage.saveSettings(settings);
     try {
       await authApi.saveKakaoSettings({
@@ -58,607 +113,407 @@ export const SystemSettingsView: React.FC = () => {
         redirectUri: settings.naverRedirectUri || `${window.location.origin}/api/auth/naver/callback`,
       });
     } catch {}
-    showToast('시스템 설정이 성공적으로 저장되었습니다.', 'success');
+    setIsDirty(false);
+    showToast('설정을 저장했습니다.', 'success');
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword) {
-      showToast('현재 비밀번호를 입력해주세요.', 'error');
-      return;
-    }
-    if (newPassword.length < 6) {
-      showToast('새 비밀번호는 최소 6자 이상이어야 합니다.', 'error');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showToast('새 비밀번호 확인이 일치하지 않습니다.', 'error');
-      return;
-    }
+    if (!currentPassword) return showToast('현재 비밀번호를 입력해 주세요.', 'error');
+    if (newPassword.length < 6) return showToast('새 비밀번호는 6자 이상이어야 합니다.', 'error');
+    if (newPassword !== confirmPassword) return showToast('새 비밀번호 확인이 일치하지 않습니다.', 'error');
 
     setIsChangingPw(true);
     try {
       const res = await authApi.changePassword(targetAdminEmail, currentPassword, newPassword);
-      showToast(res.message || '관리자 비밀번호가 성공적으로 변경되었습니다.', 'success', '비밀번호 변경 완료');
+      showToast(res.message || '비밀번호를 변경했습니다.', 'success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      showToast(err.message || '비밀번호 변경에 실패했습니다.', 'error', '변경 오류');
+      showToast(err.message || '비밀번호 변경에 실패했습니다.', 'error');
     } finally {
       setIsChangingPw(false);
     }
   };
 
-  const handleClearData = () => {
-    if (!isSuperAdmin) {
-      showToast('데이터베이스 초기화는 슈퍼 관리자 권한이 필요합니다.', 'error');
-      return;
-    }
-
-    if (
-      window.confirm(
-        '주의: 등록된 모든 강의, 커리큘럼, 평가 시험 및 수강 진도 데이터가 완전히 삭제됩니다. 계속하시겠습니까?'
-      )
-    ) {
-      storage.clearAllData();
-      showToast('모든 강의 및 학습 데이터가 초기화되었습니다.', 'info');
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+  const handleResetLearningData = async () => {
+    if (resetConfirmText.trim() !== RESET_CONFIRM_WORD || !user) return;
+    setIsResetting(true);
+    try {
+      const res = await storage.resetAllLearningData({ id: user.id, name: user.name });
+      setSettings(storage.getSettings());
+      showToast(`수강 ${res.enrollments}건, 진도 ${res.progress}건, 수료증 ${res.certificates}건을 초기화했습니다.`, 'success');
+      setIsResetOpen(false);
+      setResetConfirmText('');
+    } catch (err: any) {
+      showToast(err?.message || '초기화에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    } finally {
+      setIsResetting(false);
     }
   };
 
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    showToast('복사했습니다.', 'success');
+  };
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const showSaveBar = section === 'general' || section === 'access' || section === 'social';
+  const current = SECTIONS.find((s) => s.id === section)!;
+
+  const socialBlocks = [
+    {
+      key: 'kakao',
+      name: '카카오',
+      badge: 'bg-[#FEE500] text-black',
+      enabled: settings.kakaoLoginEnabled !== false,
+      setEnabled: (v: boolean) => update({ kakaoLoginEnabled: v }),
+      callback: `${origin}/api/auth/kakao/callback`,
+      guide: (
+        <>
+          <a href="https://developers.kakao.com" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 underline">
+            Kakao Developers
+          </a>{' '}
+          → 내 애플리케이션 → 앱 키의 <b>REST API 키</b>를 입력하고, 카카오 로그인을 켠 뒤 아래 Redirect URI를 등록하세요.
+        </>
+      ),
+      fields: [
+        { label: 'Client ID (REST API 키)', value: settings.kakaoClientId || '', set: (v: string) => update({ kakaoClientId: v }), secret: false },
+        { label: 'Client Secret (선택)', value: settings.kakaoClientSecret || '', set: (v: string) => update({ kakaoClientSecret: v }), secret: true },
+      ],
+    },
+    {
+      key: 'naver',
+      name: '네이버',
+      badge: 'bg-[#03C75A] text-white',
+      enabled: settings.naverLoginEnabled !== false,
+      setEnabled: (v: boolean) => update({ naverLoginEnabled: v }),
+      callback: `${origin}/api/auth/naver/callback`,
+      guide: (
+        <>
+          <a href="https://developers.naver.com" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 underline">
+            Naver Developers
+          </a>{' '}
+          → 애플리케이션 등록에서 Client ID와 Secret을 발급받고, 아래 Callback URL을 등록하세요.
+        </>
+      ),
+      fields: [
+        { label: 'Client ID', value: settings.naverClientId || '', set: (v: string) => update({ naverClientId: v }), secret: false },
+        { label: 'Client Secret', value: settings.naverClientSecret || '', set: (v: string) => update({ naverClientSecret: v }), secret: true },
+      ],
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* General Settings Form */}
-      <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">플랫폼 시스템 및 운영 설정</h3>
-            <p className="text-xs text-slate-500">SUPER_ADMIN만 접근 가능한 전역 운영 제어판입니다.</p>
-          </div>
-          <button
-            type="submit"
-            className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            <span>설정 저장</span>
-          </button>
-        </div>
+    <div className="min-w-0 space-y-6">
+      <AdminPageHeader title="환경설정" description="플랫폼 운영 정책과 로그인 연동, 관리자 계정, 데이터를 관리합니다." />
 
-        <div className="p-6 space-y-6">
-          {/* General Platform Info */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">기본 정보</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">플랫폼 명칭</label>
-                <input
-                  type="text"
-                  value={settings.platformName}
-                  onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">고객 지원 이메일</label>
-                <input
-                  type="email"
-                  value={settings.contactEmail}
-                  onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Policy Links (Notion & External) */}
-          <div className="pt-4 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-indigo-600" />
-              <span>운영 규정 및 개인정보처리방침 링크 (Notion)</span>
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">운영 규정 링크 (URL)</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openPolicyModal('terms')}
-                      className="text-[11px] text-indigo-600 hover:underline font-bold cursor-pointer inline-flex items-center gap-0.5"
-                    >
-                      <span>내부 모달 미리보기</span>
-                    </button>
-                    {settings.termsUrl && (
-                      <a
-                        href={settings.termsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline inline-flex items-center gap-0.5"
-                      >
-                        <span>외부(Notion)</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <input
-                  type="url"
-                  value={settings.termsUrl || ''}
-                  onChange={(e) => setSettings({ ...settings, termsUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">개인정보처리방침 링크 (URL)</label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openPolicyModal('privacy')}
-                      className="text-[11px] text-indigo-600 hover:underline font-bold cursor-pointer inline-flex items-center gap-0.5"
-                    >
-                      <span>내부 모달 미리보기</span>
-                    </button>
-                    {settings.privacyUrl && (
-                      <a
-                        href={settings.privacyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] text-slate-500 hover:text-slate-800 hover:underline inline-flex items-center gap-0.5"
-                      >
-                        <span>외부(Notion)</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <input
-                  type="url"
-                  value={settings.privacyUrl || ''}
-                  onChange={(e) => setSettings({ ...settings, privacyUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Policy & RBAC settings */}
-          <div className="pt-4 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">회원가입 및 보안 정책</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">신규 회원가입 허용</div>
-                  <div className="text-[11px] text-slate-500">일반 수강생의 회원가입을 활성화합니다.</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.allowRegistration}
-                  onChange={(e) => setSettings({ ...settings, allowRegistration: e.target.checked })}
-                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
-                />
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">점검 모드 (Maintenance)</div>
-                  <div className="text-[11px] text-slate-500">관리자 외 일반 수강생의 접근을 제한합니다.</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.maintenanceMode}
-                  onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })}
-                  className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Kakao Social Login OAuth Settings */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-4 h-4 rounded-full bg-[#FEE500] inline-flex items-center justify-center text-[10px] font-black text-black">
-                  K
-                </span>
-                <span>카카오 소셜 로그인 연동 (OAuth 2.0)</span>
-              </h4>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={settings.kakaoLoginEnabled !== false}
-                  onChange={(e) => setSettings({ ...settings, kakaoLoginEnabled: e.target.checked })}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>카카오 로그인 활성화</span>
-              </label>
-            </div>
-
-            <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200/80 mb-4 text-xs text-amber-900 space-y-1.5 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 text-amber-950">
-                <span>💡 카카오 개발자 콘솔 연동 안내</span>
-              </div>
-              <p className="text-[11px] text-amber-800">
-                1. <a href="https://developers.kakao.com" target="_blank" rel="noopener noreferrer" className="underline font-bold text-indigo-700">Kakao Developers 콘솔</a> 접속 후 <strong>[내 애플리케이션] &gt; [앱 키]</strong>에서 <strong>REST API 키</strong>를 복사하여 아래에 입력하세요.
-                <br />
-                2. <strong>[카카오 로그인]</strong> 메뉴에서 <strong>활성화 설정(ON)</strong>으로 변경하고, 아래의 <strong>Redirect URI</strong>를 등록하세요.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">카카오 콘솔 등록용 Redirect URI</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const uri = `${window.location.origin}/api/auth/kakao/callback`;
-                      navigator.clipboard.writeText(uri);
-                      showToast('Redirect URI가 클립보드에 복사되었습니다.', 'success');
-                    }}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1"
-                  >
-                    <span>URI 복사하기</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  readOnly
-                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/auth/kakao/callback`}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-mono select-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    카카오 Client ID (REST API 키)
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.kakaoClientId || ''}
-                    onChange={(e) => setSettings({ ...settings, kakaoClientId: e.target.value })}
-                    placeholder="예: 46a1b2c3d4e5f6... (환경변수 KAKAO_CLIENT_ID도 지원)"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">환경변수(VITE_KAKAO_CLIENT_ID) 또는 여기에 직접 키를 입력하여 저장할 수 있습니다.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    카카오 Client Secret (선택 사항)
-                  </label>
-                  <input
-                    type="password"
-                    value={settings.kakaoClientSecret || ''}
-                    onChange={(e) => setSettings({ ...settings, kakaoClientSecret: e.target.value })}
-                    placeholder="카카오 보안 비밀키 (설정한 경우에만 입력)"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">카카오 개발자센터 [보안] 메뉴에서 Secret 코드를 활성화한 경우 입력하세요.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Naver Social Login OAuth Settings */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-4 h-4 rounded-full bg-[#03C75A] inline-flex items-center justify-center text-[10px] font-black text-white">
-                  N
-                </span>
-                <span>네이버 소셜 로그인 연동 (OAuth 2.0)</span>
-              </h4>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={settings.naverLoginEnabled !== false}
-                  onChange={(e) => setSettings({ ...settings, naverLoginEnabled: e.target.checked })}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>네이버 로그인 활성화</span>
-              </label>
-            </div>
-
-            <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80 mb-4 text-xs text-emerald-900 space-y-1.5 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 text-emerald-950">
-                <span>💡 네이버 개발자 센터 연동 안내</span>
-              </div>
-              <p className="text-[11px] text-emerald-800">
-                1. <a href="https://developers.naver.com" target="_blank" rel="noopener noreferrer" className="underline font-bold text-emerald-700">Naver Developers 콘솔</a> 접속 후 <strong>[Application] &gt; [애플리케이션 등록]</strong>에서 <strong>Client ID</strong> 및 <strong>Client Secret</strong>을 발급받아 입력하세요.
-                <br />
-                2. <strong>[API 설정]</strong> 메뉴의 로그인 오픈 API 서비스 환경에서 <strong>서비스 URL</strong>과 아래의 <strong>Callback URL</strong>을 등록하세요.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">네이버 콘솔 등록용 Callback URL</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const uri = `${window.location.origin}/api/auth/naver/callback`;
-                      navigator.clipboard.writeText(uri);
-                      showToast('Callback URL이 클립보드에 복사되었습니다.', 'success');
-                    }}
-                    className="text-[11px] text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer underline flex items-center gap-1"
-                  >
-                    <span>URL 복사</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  readOnly
-                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/auth/naver/callback`}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-mono select-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    네이버 Client ID
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.naverClientId || ''}
-                    onChange={(e) => setSettings({ ...settings, naverClientId: e.target.value })}
-                    placeholder="예: WX89abcde... (환경변수 NAVER_CLIENT_ID도 지원)"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">환경변수(NAVER_CLIENT_ID) 또는 여기에 직접 키를 입력하여 저장할 수 있습니다.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    네이버 Client Secret
-                  </label>
-                  <input
-                    type="password"
-                    value={settings.naverClientSecret || ''}
-                    onChange={(e) => setSettings({ ...settings, naverClientSecret: e.target.value })}
-                    placeholder="네이버 Client Secret 키 입력"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">네이버 개발자센터 애플리케이션 상세 정보의 Client Secret을 입력하세요.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Google Social Login Settings */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-4 h-4 rounded-full bg-white border border-slate-200 inline-flex items-center justify-center text-[10px] font-black text-blue-600">
-                  G
-                </span>
-                <span>구글 소셜 로그인 연동 (Google Auth / Firebase)</span>
-              </h4>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={settings.googleLoginEnabled !== false}
-                  onChange={(e) => setSettings({ ...settings, googleLoginEnabled: e.target.checked })}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>구글 로그인 활성화</span>
-              </label>
-            </div>
-
-            <div className="p-4 bg-sky-50/60 rounded-xl border border-sky-200/80 text-xs text-sky-900 space-y-1.5 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 text-sky-950">
-                <span>⚡ Firebase Authentication 자동 연동 활성화됨</span>
-              </div>
-              <p className="text-[11px] text-sky-800">
-                Google 로그인은 TDSNTLMS Firebase Authentication 인프라와 즉시 연동되어 작동합니다.
-                사용자가 Google 계정으로 로그인/가입하면 자동으로 LMS 회원 프로필 및 세션 토큰이 생성되고 Firestore에 안전하게 보관됩니다.
-              </p>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* Admin Security & Password Management Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">관리자 인증 및 비밀번호 관리</h3>
-              <p className="text-xs text-slate-500">
-                TDSNTLMS 관리자 계정 보안 설정 및 비밀번호 변경 (서버 PBKDF2 암호화 검증)
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Allowed Admin Accounts Display */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
-              인가된 TDSNTLMS 관리자 계정 (3개)
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {allowedAdmins.map((adm) => {
-                const isCurrent = user?.email.toLowerCase() === adm.email.toLowerCase();
-                return (
-                  <div
-                    key={adm.email}
-                    className={`p-4 rounded-xl border transition-all ${
-                      isCurrent
-                        ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-200'
-                        : 'bg-slate-50/80 border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold text-slate-900">{adm.name}</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                        {adm.role}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-600 font-mono break-all">{adm.email}</div>
-                    {isCurrent && (
-                      <div className="mt-2 text-[11px] text-indigo-600 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>현재 로그인된 계정</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Password Change Form */}
-          <div className="pt-4 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <KeyRound className="w-4 h-4 text-indigo-600" />
-              <span>관리자 비밀번호 변경</span>
-            </h4>
-            <p className="text-xs text-slate-500 mb-4">
-              최초 비밀번호(STAFF0606)로 로그인 후 보안 강화를 위해 안전한 신규 비밀번호로 변경하세요.
-            </p>
-
-            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-lg">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">대상 관리자 이메일</label>
-                <select
-                  value={targetAdminEmail}
-                  onChange={(e) => setTargetAdminEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-mono"
-                >
-                  {allowedAdmins.map((adm) => (
-                    <option key={adm.email} value={adm.email}>
-                      {adm.email} ({adm.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">현재 비밀번호</label>
-                <div className="relative">
-                  <input
-                    type={showCurrentPw ? 'text' : 'password'}
-                    required
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="현재 비밀번호 입력"
-                    className="w-full pl-3 pr-10 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrentPw(!showCurrentPw)}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">새 비밀번호 (6자 이상)</label>
-                  <div className="relative">
-                    <input
-                      type={showNewPw ? 'text' : 'password'}
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="새 비밀번호"
-                      className="w-full pl-3 pr-10 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPw(!showNewPw)}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">새 비밀번호 확인</label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="새 비밀번호 확인"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
+      <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start">
+        <nav aria-label="설정 메뉴" className="-mx-4 flex gap-1 overflow-x-auto px-4 scrollbar-none lg:sticky lg:top-[88px] lg:mx-0 lg:flex-col lg:px-0">
+          {SECTIONS.map(({ id, label, icon: Icon }) => {
+            const active = section === id;
+            return (
               <button
-                type="submit"
-                disabled={isChangingPw}
-                className="py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                key={id}
+                type="button"
+                onClick={() => setSection(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
+                  active ? 'bg-white text-neutral-900 shadow-xs ring-1 ring-neutral-200' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
+                } ${id === 'data' ? 'lg:mt-4' : ''}`}
               >
-                {isChangingPw ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>서버 암호화 처리 중...</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>비밀번호 변경 적용</span>
-                  </>
-                )}
+                <Icon className="h-4 w-4" />
+                {label}
               </button>
-            </form>
+            );
+          })}
+        </nav>
+
+        <section className="min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+          <div className="border-b border-neutral-200 px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold text-neutral-900">{current.label}</h2>
           </div>
-        </div>
-      </div>
 
-      {/* Database Management Section */}
-      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
-        <div>
-          <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-            <Database className="w-4 h-4 text-indigo-600" />
-            <span>데이터베이스 관리</span>
-          </h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            시스템 내 등록된 모든 강의 및 학습 진도 데이터를 비우고 초기 상태로 정리합니다.
-          </p>
-        </div>
+          <div className="p-5 sm:p-6">
+            {section === 'general' && (
+              <div className="max-w-2xl space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="플랫폼 이름">
+                    <input type="text" value={settings.platformName} onChange={(e) => update({ platformName: e.target.value })} className="lms-input" />
+                  </Field>
+                  <Field label="문의 이메일" hint="푸터와 안내 문구에 표시됩니다.">
+                    <input type="email" value={settings.contactEmail} onChange={(e) => update({ contactEmail: e.target.value })} className="lms-input" />
+                  </Field>
+                </div>
+                {(
+                  [
+                    { label: '운영 규정 링크', key: 'termsUrl', modal: 'terms' },
+                    { label: '개인정보처리방침 링크', key: 'privacyUrl', modal: 'privacy' },
+                  ] as const
+                ).map((f) => (
+                  <Field
+                    key={f.key}
+                    label={f.label}
+                    action={
+                      <span className="flex items-center gap-3 text-xs">
+                        <button type="button" onClick={() => openPolicyModal(f.modal)} className="font-medium text-brand-700 hover:underline cursor-pointer">
+                          미리보기
+                        </button>
+                        {settings[f.key] && (
+                          <a href={settings[f.key]} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-neutral-500 hover:text-neutral-800">
+                            열기 <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </span>
+                    }
+                  >
+                    <input
+                      type="url"
+                      value={settings[f.key] || ''}
+                      onChange={(e) => update({ [f.key]: e.target.value } as Partial<SystemSettings>)}
+                      placeholder="https://"
+                      className="lms-input font-mono text-[13px]"
+                    />
+                  </Field>
+                ))}
+              </div>
+            )}
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={handleClearData}
-            disabled={!isSuperAdmin}
-            title={!isSuperAdmin ? '슈퍼 관리자 권한이 필요합니다.' : undefined}
-            className={`py-2 px-3.5 border text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 ${
-              isSuperAdmin
-                ? 'bg-white border-slate-300 hover:bg-rose-50 hover:border-rose-300 text-rose-700 cursor-pointer'
-                : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>강의 및 진도 데이터 전체 비우기</span>
-          </button>
-          {!isSuperAdmin && (
-            <span className="text-[11px] text-slate-400">※ 슈퍼 관리자 권한 필요</span>
+            {section === 'access' && (
+              <div className="max-w-2xl divide-y divide-neutral-100">
+                <SettingRow title="신규 회원가입 허용" desc="끄면 새 직원이 직접 가입할 수 없습니다.">
+                  <Toggle checked={settings.allowRegistration} onChange={(v) => update({ allowRegistration: v })} label="신규 회원가입 허용" />
+                </SettingRow>
+                <SettingRow title="점검 모드" desc="켜면 관리자를 제외한 사용자의 접속이 제한됩니다.">
+                  <Toggle checked={settings.maintenanceMode} onChange={(v) => update({ maintenanceMode: v })} label="점검 모드" danger />
+                </SettingRow>
+              </div>
+            )}
+
+            {section === 'social' && (
+              <div className="space-y-6">
+                {socialBlocks.map((b) => (
+                  <div key={b.key} className="rounded-lg border border-neutral-200">
+                    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
+                      <span className="flex items-center gap-2 text-sm font-medium text-neutral-900">
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${b.badge}`}>{b.name[0] === '카' ? 'K' : 'N'}</span>
+                        {b.name} 로그인
+                      </span>
+                      <Toggle checked={b.enabled} onChange={b.setEnabled} label={`${b.name} 로그인 사용`} />
+                    </div>
+                    <div className="space-y-4 p-4">
+                      <p className="text-[13px] leading-relaxed text-neutral-600">{b.guide}</p>
+                      <Field
+                        label="Redirect / Callback URL"
+                        action={
+                          <button type="button" onClick={() => copy(b.callback)} className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline cursor-pointer">
+                            <Copy className="h-3 w-3" /> 복사
+                          </button>
+                        }
+                      >
+                        <input type="text" readOnly value={b.callback} className="lms-input bg-neutral-50 font-mono text-[13px]" />
+                      </Field>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {b.fields.map((f) => (
+                          <Field key={f.label} label={f.label}>
+                            <input
+                              type={f.secret ? 'password' : 'text'}
+                              value={f.value}
+                              onChange={(e) => f.set(e.target.value)}
+                              className="lms-input font-mono text-[13px]"
+                              autoComplete="off"
+                            />
+                          </Field>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 px-4 py-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-medium text-neutral-900">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-neutral-200 text-[10px] font-black text-brand-600">G</span>
+                      구글 로그인
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-neutral-500">Firebase Authentication으로 동작해 별도 키 입력이 필요 없습니다.</p>
+                  </div>
+                  <Toggle checked={settings.googleLoginEnabled !== false} onChange={(v) => update({ googleLoginEnabled: v })} label="구글 로그인 사용" />
+                </div>
+              </div>
+            )}
+
+            {section === 'admins' && (
+              <div className="space-y-8">
+                <div>
+                  <p className="mb-2 text-[13px] font-medium text-neutral-800">관리자로 지정된 계정</p>
+                  <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+                    {allowedAdmins.map((adm) => {
+                      const isCurrent = user?.email.toLowerCase() === adm.email.toLowerCase();
+                      return (
+                        <li key={adm.email} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                          <span className="min-w-0">
+                            <span className="font-medium text-neutral-900">{adm.name}</span>
+                            <span className="ml-2 font-mono text-[13px] text-neutral-500">{adm.email}</span>
+                          </span>
+                          {isCurrent && (
+                            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700">
+                              <Check className="h-3.5 w-3.5" />
+                              현재 계정
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                <form onSubmit={handlePasswordChange} className="max-w-md space-y-4">
+                  <div>
+                    <p className="text-[13px] font-medium text-neutral-800">관리자 비밀번호 변경</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">처음 받은 비밀번호로 로그인했다면 바로 변경하세요.</p>
+                  </div>
+                  <Field label="대상 계정">
+                    <select value={targetAdminEmail} onChange={(e) => setTargetAdminEmail(e.target.value)} className="lms-input font-mono text-[13px]">
+                      {allowedAdmins.map((adm) => (
+                        <option key={adm.email} value={adm.email}>
+                          {adm.email} ({adm.name})
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="현재 비밀번호">
+                    <div className="relative">
+                      <input
+                        type={showPw ? 'text' : 'password'}
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        autoComplete="current-password"
+                        className="lms-input pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPw(!showPw)}
+                        aria-label={showPw ? '비밀번호 숨기기' : '비밀번호 보기'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                      >
+                        {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </Field>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="새 비밀번호 (6자 이상)">
+                      <input
+                        type={showPw ? 'text' : 'password'}
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="lms-input"
+                      />
+                    </Field>
+                    <Field label="새 비밀번호 확인">
+                      <input
+                        type={showPw ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="lms-input"
+                      />
+                    </Field>
+                  </div>
+                  <button type="submit" disabled={isChangingPw} className="lms-btn lms-btn-primary">
+                    <Lock className="h-4 w-4" />
+                    {isChangingPw ? '변경 중…' : '비밀번호 변경'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {section === 'data' && (
+              <div className="max-w-2xl space-y-4">
+                <div className="rounded-lg border border-rose-200">
+                  <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900">학습 기록 초기화</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+                        모든 직원의 수강 등록, 강의 진도, 퀴즈 응시 기록과 수료증을 지웁니다. 강의·사용자·공지는 그대로 남습니다.
+                        다른 직원의 기기에 남은 기록도 다음 접속 때 함께 지워집니다.
+                      </p>
+                      {settings.learningDataResetAt && (
+                        <p className="mt-1.5 text-xs text-neutral-400">
+                          마지막 초기화: {new Date(settings.learningDataResetAt).toLocaleString('ko-KR')}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsResetOpen(true)}
+                      disabled={!isSuperAdmin}
+                      title={!isSuperAdmin ? '서비스 총괄 권한이 필요합니다.' : undefined}
+                      className="lms-btn shrink-0 border border-rose-300 bg-white text-rose-600 hover:bg-rose-50"
+                    >
+                      초기화
+                    </button>
+                  </div>
+                </div>
+                {!isSuperAdmin && <p className="text-xs text-neutral-500">데이터 초기화는 서비스 총괄 권한이 있어야 할 수 있습니다.</p>}
+              </div>
+            )}
+          </div>
+
+          {showSaveBar && (
+            <div className="flex items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-50 px-5 py-3 sm:px-6">
+              <span className="text-[13px] text-neutral-500">{isDirty ? '저장하지 않은 변경 사항이 있습니다.' : '변경 사항이 없습니다.'}</span>
+              <button type="button" onClick={handleSave} disabled={!isDirty} className="lms-btn lms-btn-primary lms-btn-sm">
+                <Save className="h-4 w-4" />
+                저장
+              </button>
+            </div>
           )}
-        </div>
+        </section>
       </div>
+
+      <BaseModal
+        isOpen={isResetOpen}
+        onClose={() => !isResetting && setIsResetOpen(false)}
+        title="학습 기록 초기화"
+        maxWidth="md"
+        footerContent={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setIsResetOpen(false)} disabled={isResetting} className="lms-btn lms-btn-secondary">
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleResetLearningData}
+              disabled={resetConfirmText.trim() !== RESET_CONFIRM_WORD || isResetting}
+              className="lms-btn bg-rose-600 text-white hover:bg-rose-700"
+            >
+              {isResetting ? '초기화 중…' : '초기화'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-800">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+            <p className="leading-relaxed">모든 직원의 수강 기록, 진도, 퀴즈 기록, 수료증이 영구 삭제되며 되돌릴 수 없습니다.</p>
+          </div>
+          <Field label={`계속하려면 '${RESET_CONFIRM_WORD}'를 입력하세요`}>
+            <input
+              type="text"
+              value={resetConfirmText}
+              onChange={(e) => setResetConfirmText(e.target.value)}
+              className="lms-input"
+              autoFocus
+              aria-label="확인 문구"
+            />
+          </Field>
+        </div>
+      </BaseModal>
     </div>
   );
 };
-

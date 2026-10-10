@@ -8,32 +8,9 @@ import {
   VerifiedCertificateResult,
 } from '../../utils/certificate';
 import { CourseCompletionModal } from '../../components/student/CourseCompletionModal';
-import { Badge } from '../../components/common/Badge';
 import { Avatar } from '../../components/common/Avatar';
-import {
-  Award,
-  Search,
-  CheckCircle2,
-  Calendar,
-  BookOpen,
-  Copy,
-  Check,
-  Eye,
-  X,
-  Printer,
-  ShieldCheck,
-  Download,
-  Filter,
-  Layers,
-  ArrowUpDown,
-  ExternalLink,
-  ShieldAlert,
-  AlertCircle,
-  FileCheck,
-  RefreshCw,
-  Sparkles,
-  ArrowRight,
-} from 'lucide-react';
+import { BookOpen, Check, CheckCircle2, Copy, Download, Eye, Printer, Search, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { AdminPageHeader, AdminPanel, AdminStatStrip } from '../../components/admin/AdminPageHeader';
 import { useToast } from '../../context/ToastContext';
 
 interface AdminCertificatesPageProps {
@@ -267,428 +244,234 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
     setModalInitialPrint(printNow);
   };
 
+  const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+  const codeChip = (code: string) => (
+    <button
+      type="button"
+      onClick={() => handleCopyCode(code)}
+      className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs font-semibold text-neutral-800 hover:bg-neutral-200 cursor-pointer"
+      title="인증번호 복사"
+    >
+      {code}
+      {copiedCode === code ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-neutral-400" />}
+    </button>
+  );
+
+  const statusText = (done: boolean) => (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${done ? 'text-emerald-700' : 'text-neutral-500'}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${done ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+      {done ? '수료' : '학습 중'}
+    </span>
+  );
+
+  const verifyFromRow = (code: string) => {
+    setVerifyInput(code);
+    handleRunVerification(code);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-neutral-900">수료증 관리</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            발급된 수료증의 인증번호(TDSN-XXXXXXXX)를 조회하고 원본 발급 내역과 대조해 진위를 확인합니다.
-          </p>
-        </div>
-        <button type="button" onClick={handleExportCSV} className="lms-btn lms-btn-secondary shrink-0">
-          <Download className="w-4 h-4" />
-          발급 대장 CSV
-        </button>
-      </header>
+    <div className="min-w-0 space-y-6">
+      <AdminPageHeader
+        title="수료증 조회"
+        description="수료증 인증번호(TDSN-XXXXXXXX)의 진위를 확인하고 발급 대장을 관리합니다."
+        actions={
+          <button type="button" onClick={handleExportCSV} className="lms-btn lms-btn-secondary">
+            <Download className="h-4 w-4" />
+            발급 대장 CSV
+          </button>
+        }
+      />
 
-      {/* =========================================================================
-          FEATURE 1: CERTIFICATE VERIFICATION (수료증 진위 검증 시스템)
-          Allows administrators to search for and validate certificates by entering
-          a unique certificate number, retrieving original certificate data.
-          ========================================================================= */}
-      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <h2 className="text-base font-semibold text-neutral-900">
-                  수료증 진위 검증
-                </h2>
-              </div>
-              <p className="text-[13px] text-neutral-500">
-                수료증에 기재된 고유 인증번호(예: TDSN-XXXXXXXX)를 입력하면 데이터베이스의 원본 발급 내역과 대조하여 진위 여부를 즉시 검증하고 원본 문서를 호출합니다.
-              </p>
-            </div>
+      <AdminStatStrip
+        stats={[
+          { label: '전체 인증번호', value: `${stats.total}건` },
+          { label: '수료', value: `${stats.completed}건` },
+          { label: '학습 중', value: `${stats.learning}건` },
+          { label: '수료율', value: `${completionRate}%` },
+        ]}
+      />
 
-            {/* Quick Sample Buttons */}
-            {allCertificates.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                <span className="text-xs text-neutral-500 mr-1">최근 발급:</span>
-                {allCertificates.slice(0, 3).map((item) => (
-                  <button
-                    key={item.certCode}
-                    type="button"
-                    onClick={() => handleQuickVerifySample(item.certCode)}
-                    className="font-mono text-[11px] font-semibold px-2 py-1 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 rounded-md border border-neutral-200 transition-colors cursor-pointer"
-                    title={`${item.user?.name || '수강생'} - ${item.course.title}`}
-                  >
-                    {item.certCode}
-                  </button>
-                ))}
-              </div>
+      {/* Verification */}
+      <AdminPanel title="진위 확인" bodyClassName="p-5 space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleRunVerification();
+          }}
+          className="flex flex-col gap-2 sm:flex-row"
+        >
+          <div className="relative flex-1">
+            <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              id="input-admin-verify-code"
+              value={verifyInput}
+              onChange={(e) => setVerifyInput(e.target.value)}
+              placeholder="수료증 인증번호 입력 (예: TDSN-XXXXXXXX)"
+              aria-label="수료증 인증번호"
+              className="lms-input h-10 pl-9 pr-9 font-mono tracking-wide"
+            />
+            {verifyInput && (
+              <button
+                type="button"
+                onClick={handleResetVerification}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                aria-label="입력 지우기"
+              >
+                <X className="h-4 w-4" />
+              </button>
             )}
           </div>
+          <button type="submit" className="lms-btn lms-btn-primary">
+            확인
+          </button>
+        </form>
 
-          {/* Verification Search Bar */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleRunVerification();
-            }}
-            className="mt-5 flex flex-col sm:flex-row items-stretch gap-2.5"
-          >
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                id="input-admin-verify-code"
-                value={verifyInput}
-                onChange={(e) => setVerifyInput(e.target.value)}
-                placeholder="검증할 수료증 고유 인증번호를 입력하세요 (예: TDSN-XXXXXXXX)..."
-                className="lms-input h-11 pl-10 pr-10 font-mono tracking-wide"
-              />
-              {verifyInput && (
-                <button
-                  type="button"
-                  onClick={handleResetVerification}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
-                  title="초기화"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
+        {allCertificates.length > 0 && !hasValidated && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+            최근 발급:
+            {allCertificates.slice(0, 3).map((item) => (
               <button
-                type="submit"
-                className="lms-btn lms-btn-primary h-11"
+                key={item.certCode}
+                type="button"
+                onClick={() => handleQuickVerifySample(item.certCode)}
+                className="rounded-md border border-neutral-200 px-2 py-0.5 font-mono text-[11px] text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                title={`${item.user?.name || '수강생'} · ${item.course.title}`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>검증</span>
+                {item.certCode}
               </button>
-
-              {hasValidated && (
-                <button
-                  type="button"
-                  onClick={handleResetVerification}
-                  className="lms-btn lms-btn-secondary h-11 px-3"
-                  title="검증 결과 초기화"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-
-        {/* Verification Result Display Area */}
-        {hasValidated && verificationResult && (
-          <div className="p-5 sm:p-6 bg-slate-50 border-t border-slate-200 animate-fadeIn">
-            {verificationResult.isValid ? (
-              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6 space-y-5">
-                {/* Result Header Banner */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                        verificationResult.isCompleted
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-600 border border-amber-200'
-                      }`}
-                    >
-                      {verificationResult.isCompleted ? (
-                        <CheckCircle2 className="w-6 h-6" />
-                      ) : (
-                        <BookOpen className="w-6 h-6" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base sm:text-lg font-black text-slate-900">
-                          {verificationResult.isCompleted
-                            ? '공식 수료증 원본 발급 확인 완료'
-                            : '학습 진행 중인 등록 인증번호'}
-                        </h3>
-                        {verificationResult.isCompleted ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            공식 인증 유효 (Valid)
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            학습 진행 중 (진도율 {verificationResult.progressPercentage}%)
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        시스템 검증 일시: <strong className="text-slate-700">{verificationResult.verifiedAt}</strong> · 고유 식별 해시 매칭 성공
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Actions for Verified Result */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyVerificationStatement(verificationResult)}
-                      className="py-2 px-3 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>검증 확인서 복사</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenVerifiedModal(verificationResult, false)}
-                      className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>공식 수료증 원본 보기</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenVerifiedModal(verificationResult, true)}
-                      className="py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>인쇄 / PDF 출력</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Original Certificate Data Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Recipient info */}
-                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      수료자 인적사항
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <Avatar
-                        src={verificationResult.user?.avatar}
-                        name={verificationResult.user?.name || '수강생'}
-                        size="md"
-                      />
-                      <div className="min-w-0">
-                        <div className="font-bold text-sm text-slate-900 truncate">
-                          {verificationResult.user?.name || '익명 수강생'}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {verificationResult.user?.email || '이메일 정보 없음'}
-                        </div>
-                        <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-                          UID: {verificationResult.user?.id || verificationResult.enrollment?.userId}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Course info */}
-                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      이수 교육과정 정보
-                    </span>
-                    <div className="space-y-1">
-                      <div className="font-bold text-sm text-slate-900 line-clamp-1" title={verificationResult.course?.title}>
-                        {verificationResult.course?.title}
-                      </div>
-                      <div className="text-xs text-slate-600 flex items-center gap-1.5">
-                        <span>담당 교수: <strong>{verificationResult.course?.instructorName}</strong></span>
-                        <span>·</span>
-                        <span>{verificationResult.course?.categoryName || '전문 역량'}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        과정 고유 ID: {verificationResult.course?.id}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Completion Ledger */}
-                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      학습 및 이수 통계
-                    </span>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">이수 진도율:</span>
-                        <strong
-                          className={`text-sm ${
-                            verificationResult.isCompleted ? 'text-emerald-700' : 'text-amber-700'
-                          }`}
-                        >
-                          {verificationResult.progressPercentage}%
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">이수 차시:</span>
-                        <strong className="text-slate-900 text-sm">
-                          {verificationResult.completedLessons || 0} / {verificationResult.totalLessons}강
-                        </strong>
-                      </div>
-                      <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                        <span className="text-slate-400 text-[11px]">수료/등록 일자:</span>
-                        <span className="font-semibold text-slate-800">
-                          {verificationResult.completionDate}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Verification Digital Signature Footer */}
-                <div className="p-3 bg-[#FAF7F0] rounded-xl border border-[#D4C4A8] flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Award className="w-4 h-4 text-[#8C6D3B]" />
-                    <span className="text-slate-700 font-serif">
-                      발행 기관: <strong className="text-[#0F172A]">TDSN 교육혁신본부 아카데미</strong> · 강의 제작 강사: <strong className="text-rose-800 font-bold">{verificationResult.course?.instructorName || '책임강사'} (강사 직인 날인)</strong> · 인증번호: <strong className="font-mono text-[#0F172A]">{verificationResult.certCode}</strong>
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-[#8C6D3B] font-mono hidden sm:inline-block">
-                    강의 제작 강사 직인 및 위변조 방지 전자 인증
-                  </span>
-                </div>
-              </div>
-            ) : (
-              /* Invalid Certificate Number Notice */
-              <div className="bg-white rounded-2xl border border-rose-200 p-6 flex items-start gap-4 shadow-sm">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div className="space-y-1 flex-1">
-                  <h3 className="text-base font-bold text-rose-900">
-                    유효하지 않거나 등록되지 않은 수료증 번호입니다.
-                  </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    입력하신 번호 <strong className="font-mono text-rose-700">{verificationResult.certCode}</strong> 에 해당하는 공식 수료증 발급 내역이 TDSN 아카데미 데이터베이스에 존재하지 않습니다.
-                  </p>
-                  <div className="pt-2 text-xs text-slate-500 space-y-0.5">
-                    <p>• 인증번호 형식이 올바른지 확인해주세요 (표준 형식: <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-indigo-700">TDSN-XXXXXXXX</code>).</p>
-                    <p>• 오타가 없거나 앞뒤 공백이 포함되지 않았는지 다시 한 번 점검해주세요.</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         )}
-      </div>
 
-      {/* Stats Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">총 발급 가능/연계 건수</span>
-            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-              <Award className="w-4 h-4" />
+        {hasValidated && verificationResult && (
+          verificationResult.isValid ? (
+            <div className="rounded-lg border border-neutral-200">
+              <div className="flex flex-col gap-3 border-b border-neutral-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  {verificationResult.isCompleted ? (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <span className="text-neutral-900">정상 발급된 수료증입니다</span>
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-5 w-5 text-amber-500" />
+                      <span className="text-neutral-900">아직 수료 전인 수강 기록입니다 (진도 {verificationResult.progressPercentage}%)</span>
+                    </>
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => handleCopyVerificationStatement(verificationResult)} className="lms-btn lms-btn-ghost lms-btn-sm">
+                    <Copy className="h-4 w-4" />
+                    확인서 복사
+                  </button>
+                  <button type="button" onClick={() => handleOpenVerifiedModal(verificationResult, true)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                    <Printer className="h-4 w-4" />
+                    인쇄 · PDF
+                  </button>
+                  <button type="button" onClick={() => handleOpenVerifiedModal(verificationResult, false)} className="lms-btn lms-btn-primary lms-btn-sm">
+                    <Eye className="h-4 w-4" />
+                    수료증 보기
+                  </button>
+                </div>
+              </div>
+              <dl className="grid gap-4 p-4 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs text-neutral-500">수료자</dt>
+                  <dd className="mt-1 flex items-center gap-2">
+                    <Avatar src={verificationResult.user?.avatar} name={verificationResult.user?.name || '수강생'} size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-neutral-900">{verificationResult.user?.name || '알 수 없음'}</span>
+                      <span className="block truncate text-xs text-neutral-500">{verificationResult.user?.email || '-'}</span>
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-neutral-500">과정</dt>
+                  <dd className="mt-1">
+                    <span className="block truncate font-medium text-neutral-900" title={verificationResult.course?.title}>
+                      {verificationResult.course?.title}
+                    </span>
+                    <span className="block truncate text-xs text-neutral-500">
+                      {verificationResult.course?.instructorName} · {verificationResult.course?.categoryName}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-neutral-500">이수 정보</dt>
+                  <dd className="mt-1">
+                    <span className="block font-medium text-neutral-900">
+                      {verificationResult.completedLessons || 0} / {verificationResult.totalLessons}강 · {verificationResult.progressPercentage}%
+                    </span>
+                    <span className="block text-xs text-neutral-500">{verificationResult.completionDate}</span>
+                  </dd>
+                </div>
+              </dl>
+              <p className="border-t border-neutral-100 px-4 py-2.5 font-mono text-xs text-neutral-500">
+                {verificationResult.certCode} · 확인 시각 {verificationResult.verifiedAt}
+              </p>
             </div>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
-            {stats.total}건
-          </div>
-          <div className="text-[11px] text-slate-400">
-            전체 수강 등록 연계 인증번호
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">수료 완료 (공식 발급)</span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+              <div className="text-sm">
+                <p className="font-medium text-rose-900">발급 기록이 없는 인증번호입니다</p>
+                <p className="mt-1 text-rose-800">
+                  <span className="font-mono">{verificationResult.certCode}</span>와 일치하는 수료 기록이 없습니다. 형식(TDSN-XXXXXXXX)과 오타를 확인해 주세요.
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-600 tabular-nums">
-            {stats.completed}건
-          </div>
-          <div className="text-[11px] text-emerald-700 font-medium">
-            전 과정 완주(100%) 및 공식 인증서 효력 보유
-          </div>
-        </div>
+          )
+        )}
+      </AdminPanel>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">학습 진행 중</span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <BookOpen className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-600 tabular-nums">
-            {stats.learning}건
-          </div>
-          <div className="text-[11px] text-slate-400">
-            완강 시 즉시 수료증 활성화
-          </div>
-        </div>
-      </div>
-
-      {/* Filter and Search Controls */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Main Search Bar */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      {/* Ledger */}
+      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 lg:flex-row lg:items-center">
+          <div className="relative lg:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <input
               type="text"
               id="input-admin-certificate-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="수료증 번호(예: TDSN-XXXXXXXX), 수강생 성명, 이메일, 강의명으로 검색..."
-              className="w-full pl-10 pr-10 py-2.5 text-xs bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-medium"
+              placeholder="인증번호, 이름, 이메일, 강의명"
+              aria-label="발급 대장 검색"
+              className="lms-input h-9 pl-9"
             />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md transition-colors cursor-pointer"
-                title="입력 내용 지우기"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
-
-          {/* Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Status tabs */}
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setFilterStatus('all')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  filterStatus === 'all'
-                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                전체 ({allCertificates.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('completed')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  filterStatus === 'completed'
-                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                수료 완료 ({stats.completed})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('learning')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  filterStatus === 'learning'
-                    ? 'bg-white text-amber-700 shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                학습 중 ({stats.learning})
-              </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg bg-neutral-100 p-0.5" role="group" aria-label="수료 상태">
+              {(
+                [
+                  { id: 'all', label: `전체 ${allCertificates.length}` },
+                  { id: 'completed', label: `수료 ${stats.completed}` },
+                  { id: 'learning', label: `학습 중 ${stats.learning}` },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={filterStatus === s.id}
+                  onClick={() => setFilterStatus(s.id)}
+                  className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer ${
+                    filterStatus === s.id ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-
-            {/* Course select */}
             <select
               value={selectedCourseId}
               onChange={(e) => setSelectedCourseId(e.target.value)}
-              className="py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 cursor-pointer"
+              aria-label="강의"
+              className="lms-input h-9 w-auto max-w-[240px] pr-8"
             >
-              <option value="all">전체 강의 목록</option>
+              <option value="all">전체 강의</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
@@ -696,176 +479,112 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
               ))}
             </select>
           </div>
-        </div>
-      </div>
-
-      {/* Certificates Data Table */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm sm:text-base font-bold text-slate-900">수료증 발급 대장 목록</h2>
-            <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/60">
-              총 {filtered.length}건
-            </span>
-          </div>
-          <span className="text-[11px] text-slate-400 hidden sm:inline-block">
-            * 인증번호를 클릭하면 복사되며, '검증' 버튼으로 상단 진위 검증 창을 즉시 호출할 수 있습니다.
-          </span>
+          <span className="text-[13px] tabular-nums text-neutral-500 lg:ml-auto">{filtered.length}건</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
-              <tr>
-                <th className="py-3.5 px-4">수료증 고유 인증번호</th>
-                <th className="py-3.5 px-4">수강생</th>
-                <th className="py-3.5 px-4">이수 강의</th>
-                <th className="py-3.5 px-4">진도율</th>
-                <th className="py-3.5 px-4">이수 상태</th>
-                <th className="py-3.5 px-4">수료 일자</th>
-                <th className="py-3.5 px-4 text-right">관리 / 검증</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-14 text-center text-slate-400">
-                    <Award className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700">일치하는 수료증 번호나 발급 내역이 없습니다.</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      검색 조건을 변경하거나 상단 검색창에 다른 키워드를 입력해보세요.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((item) => (
-                  <tr key={`${item.course.id}_${item.enrollment.userId}`} className="hover:bg-slate-50/80 transition-colors">
-                    {/* Cert Code */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleCopyCode(item.certCode)}
-                          className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200/70 transition-colors flex items-center gap-1.5 cursor-pointer"
-                          title="인증번호 복사"
-                        >
-                          <span>{item.certCode}</span>
-                          {copiedCode === item.certCode ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-indigo-400" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+        {filtered.length === 0 ? (
+          <p className="px-5 py-14 text-center text-sm text-neutral-500">
+            {allCertificates.length === 0 ? '아직 발급된 수료증이 없습니다.' : '조건에 맞는 기록이 없습니다.'}
+          </p>
+        ) : (
+          <>
+            <ul className="divide-y divide-neutral-100 md:hidden">
+              {filtered.map((item) => (
+                <li key={`m_${item.course.id}_${item.enrollment.userId}`} className="space-y-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    {codeChip(item.certCode)}
+                    {statusText(item.isCompleted)}
+                  </div>
+                  <p className="truncate text-sm font-medium text-neutral-900">{item.course.title}</p>
+                  <p className="text-xs text-neutral-500">
+                    {item.user?.name || '알 수 없음'} · 진도 {item.enrollment.progressPercentage}% · {item.completionDate}
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => verifyFromRow(item.certCode)} className="lms-btn lms-btn-secondary lms-btn-sm">
+                      <ShieldCheck className="h-4 w-4" />
+                      확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCertForModal(item);
+                        setModalInitialPrint(false);
+                      }}
+                      className="lms-btn lms-btn-secondary lms-btn-sm"
+                    >
+                      <Eye className="h-4 w-4" />
+                      보기
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
 
-                    {/* Student */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar
-                          src={item.user?.avatar}
-                          name={item.user?.name || '수강생'}
-                          size="sm"
-                        />
-                        <div>
-                          <div className="font-bold text-slate-900">{item.user?.name || '익명 수강생'}</div>
-                          <div className="text-[11px] text-slate-400">{item.user?.email || '이메일 없음'}</div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full whitespace-nowrap text-left text-sm">
+                <thead className="border-b border-neutral-200 bg-neutral-50 text-xs text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-2.5 font-medium">인증번호</th>
+                    <th className="px-3 py-2.5 font-medium">수강생</th>
+                    <th className="px-3 py-2.5 font-medium">강의</th>
+                    <th className="px-3 py-2.5 text-right font-medium">진도</th>
+                    <th className="px-3 py-2.5 font-medium">상태</th>
+                    <th className="px-3 py-2.5 font-medium">수료일</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                  {filtered.map((item) => (
+                    <tr key={`${item.course.id}_${item.enrollment.userId}`} className="hover:bg-neutral-50">
+                      <td className="px-4 py-3">{codeChip(item.certCode)}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar src={item.user?.avatar} name={item.user?.name || '수강생'} size="sm" />
+                          <div>
+                            <div className="font-medium text-neutral-900">{item.user?.name || '알 수 없음'}</div>
+                            <div className="text-xs text-neutral-500">{item.user?.email || '-'}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Course */}
-                    <td className="py-3.5 px-4">
-                      <div className="max-w-[220px]">
-                        <div className="font-semibold text-slate-900 truncate" title={item.course.title}>
+                      </td>
+                      <td className="max-w-[260px] px-3 py-3">
+                        <div className="truncate font-medium text-neutral-900" title={item.course.title}>
                           {item.course.title}
                         </div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>{item.course.instructorName}</span>
-                          <span>·</span>
-                          <span>총 {item.totalLessons}강</span>
+                        <div className="text-xs text-neutral-500">
+                          {item.course.instructorName} · {item.totalLessons}강
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Progress */}
-                    <td className="py-3.5 px-4 font-bold tabular-nums">
-                      <span className={item.enrollment.progressPercentage === 100 ? 'text-emerald-700' : 'text-slate-700'}>
-                        {item.enrollment.progressPercentage}%
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="py-3.5 px-4">
-                      {item.isCompleted ? (
-                        <Badge variant="success" size="sm">
-                          <CheckCircle2 className="w-3 h-3" />
-                          수료 완료
-                        </Badge>
-                      ) : (
-                        <Badge variant="primary" size="sm">
-                          학습 중
-                        </Badge>
-                      )}
-                    </td>
-
-                    {/* Date */}
-                    <td className="py-3.5 px-4 text-slate-500 font-medium">
-                      {item.completionDate}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Instant Verify Button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVerifyInput(item.certCode);
-                            handleRunVerification(item.certCode);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
-                          title="진위 검증 패널에서 대조"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>검증</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCertForModal(item);
-                            setModalInitialPrint(false);
-                          }}
-                          className="py-1.5 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer shadow-2xs"
-                          title="공식 원본 수료증 열기"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>수료증 보기</span>
-                        </button>
-
-                        {onNavigate && (
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{item.enrollment.progressPercentage}%</td>
+                      <td className="px-3 py-3">{statusText(item.isCompleted)}</td>
+                      <td className="px-3 py-3 tabular-nums text-neutral-500">{item.completionDate}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button type="button" onClick={() => verifyFromRow(item.certCode)} className="lms-btn lms-btn-ghost lms-btn-sm" title="진위 확인">
+                            <ShieldCheck className="h-4 w-4" />
+                            확인
+                          </button>
                           <button
                             type="button"
-                            onClick={() => onNavigate('admin-courses-edit', item.course.id)}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer"
-                            title="강의 상세 편집으로 이동"
+                            onClick={() => {
+                              setSelectedCertForModal(item);
+                              setModalInitialPrint(false);
+                            }}
+                            className="lms-btn lms-btn-secondary lms-btn-sm"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <Eye className="h-4 w-4" />
+                            수료증
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
 
-      {/* Certificate Viewer Modal (Gold-Navy-Ivory Enterprise Theme) */}
       {selectedCertForModal && (
         <CourseCompletionModal
           isOpen={Boolean(selectedCertForModal)}
@@ -885,4 +604,3 @@ export const AdminCertificatesPage: React.FC<AdminCertificatesPageProps> = ({
     </div>
   );
 };
-

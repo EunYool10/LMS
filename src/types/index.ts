@@ -297,6 +297,8 @@ export interface SystemSettings {
   naverLoginEnabled?: boolean;
   googleLoginEnabled?: boolean;
   googleClientId?: string;
+  /** Set when an admin wipes all enrollments/progress; clients clear their local caches once. */
+  learningDataResetAt?: string;
 }
 
 export interface ToastMessage {

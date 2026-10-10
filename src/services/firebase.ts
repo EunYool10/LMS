@@ -403,6 +403,21 @@ export const firestoreService = {
   // ====================================================
 
   /**
+   * Delete every document in a collection (used by the admin learning-data reset). Returns the count.
+   */
+  async deleteAllDocs(collectionName: string): Promise<number> {
+    const snap = await getDocs(collection(db, collectionName));
+    let deleted = 0;
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      deleted += Math.min(400, snap.docs.length - i);
+    }
+    return deleted;
+  },
+
+  /**
    * Fetch enrollment records (all users when userId is omitted — admin reporting).
    */
   async getEnrollmentRecords(userId?: string): Promise<Array<{ userId: string; courseId: string; enrolledAt?: string }>> {
