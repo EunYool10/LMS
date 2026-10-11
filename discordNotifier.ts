@@ -158,4 +158,10 @@ export class WindowCounter {
     }
     return list.length;
   }
+
+  /** How many hits the key has inside the window, without recording one. */
+  count(key: string): number {
+    const now = Date.now();
+    return (this.hits.get(key) || []).filter((t) => now - t < this.windowMs).length;
+  }
 }

@@ -100,31 +100,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const token = authApi.getToken();
 
         if (currentUser) {
-          const isProtectedAdmin =
-            currentUser.email?.toLowerCase() === 'teamdevstudiont@gmail.com' ||
-            currentUser.email?.toLowerCase() === 'eunyool100208@gmail.com' ||
-            currentUser.email?.toLowerCase() === 'deer123424@gmail.com' ||
-            currentUser.email?.toLowerCase() === 'ayun24song@gmail.com' ||
-            currentUser.id === 'TDSNTLMS' ||
-            currentUser.id === 'admin_EunYool' ||
-            currentUser.id === 'admin_ayun24song';
-
-          if (isProtectedAdmin && (!currentUser.role || currentUser.role === 'USER')) {
-            currentUser.role = 'SUPER_ADMIN';
-            storage.setCurrentUser(currentUser);
+          // A cached user without a server-signed session (older sign-ins, offline fallbacks) must sign in again.
+          const verification = token ? await authApi.verifySession(token) : { valid: false };
+          if (!verification.valid) {
+            storage.setCurrentUser(null);
+            authApi.clearToken();
+            setUser(null);
+            setIsLoadingSession(false);
+            return;
           }
-
-          if (token) {
-            // Verify token validity with backend
-            const verification = await authApi.verifySession(token);
-            if (!verification.valid) {
-              // Token invalid/expired
-              storage.setCurrentUser(null);
-              authApi.clearToken();
-              setUser(null);
-              setIsLoadingSession(false);
-              return;
-            }
+          // The server's current role wins over the cached one (roles can be granted or revoked meanwhile).
+          if (verification.role && verification.role !== currentUser.role) {
+            currentUser.role = verification.role as User['role'];
+            storage.setCurrentUser(currentUser);
           }
           setUser(currentUser);
         } else {

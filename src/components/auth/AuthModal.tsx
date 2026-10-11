@@ -121,7 +121,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
   };
   const validatePassword = (val: string) => {
     if (!val) return '비밀번호를 입력해 주세요.';
-    if (isRegister && val.length < 6) return '비밀번호는 6자 이상이어야 해요.';
+    if (isRegister && val.length < 8) return '비밀번호는 8자 이상이어야 해요.';
     return '';
   };
   const validateName = (val: string) => {
@@ -364,7 +364,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                 <label htmlFor="auth-password" className="block text-[13px] font-medium text-neutral-800">
                   비밀번호
                 </label>
-                {isRegister && <span className="text-xs text-neutral-400">6자 이상</span>}
+                {isRegister && <span className="text-xs text-neutral-400">8자 이상</span>}
               </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />

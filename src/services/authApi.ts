@@ -4,6 +4,59 @@ import { firestoreService } from './firebase';
 
 const TOKEN_STORAGE_KEY = 'tdsnt_jwt_auth_token_v1';
 
+const readToken = () => {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const isOwnApiUrl = (url: string) => {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/');
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The server only accepts writes (and personal reads) with the signed session token, so every
+ * same-origin /api/ request — fetch and XMLHttpRequest uploads alike — carries it automatically.
+ */
+export function installAuthorizedRequests(): void {
+  const w = window as any;
+  if (w.__lmsAuthorizedRequests) return;
+  w.__lmsAuthorizedRequests = true;
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const token = readToken();
+    if (!token || !isOwnApiUrl(url)) return nativeFetch(input, init);
+    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+    if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+    return nativeFetch(input, { ...init, headers });
+  };
+
+  const nativeOpen = XMLHttpRequest.prototype.open;
+  const nativeSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest & { __lmsUrl?: string }, ...args: any[]) {
+    this.__lmsUrl = String(args[1]);
+    return (nativeOpen as any).apply(this, args);
+  };
+  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest & { __lmsUrl?: string }, body?: any) {
+    const token = readToken();
+    if (token && this.__lmsUrl && isOwnApiUrl(this.__lmsUrl)) {
+      try {
+        this.setRequestHeader('Authorization', `Bearer ${token}`);
+      } catch {}
+    }
+    return nativeSend.call(this, body);
+  };
+}
+
 export interface LoginResponse {
   success: boolean;
   user: User;
@@ -23,11 +76,7 @@ export const authApi = {
    * Token helpers
    */
   getToken(): string | null {
-    try {
-      return localStorage.getItem(TOKEN_STORAGE_KEY);
-    } catch {
-      return null;
-    }
+    return readToken();
   },
 
   setToken(token: string): void {
@@ -59,9 +108,11 @@ export const authApi = {
         const data = await res.json();
         return { valid: true, role: data.role };
       }
+      // The server answered: an expired, unsigned or suspended session is over.
+      if (res.status === 401 || res.status === 403) return { valid: false };
     } catch {}
 
-    // Fallback client validation for offline/dev
+    // Server unreachable (offline): keep the cached session until it can be checked.
     return { valid: true };
   },
 
@@ -89,7 +140,8 @@ export const authApi = {
             this.setToken(data.token);
           }
 
-          // Fetch from Firestore to preserve custom names, avatars, and roles modified by admin
+          // Fetch from Firestore to preserve custom names and avatars. The role always comes from the
+          // server, which only honours roles granted by an owner.
           let firestoreUser: User | null = null;
           try {
             firestoreUser = await firestoreService.getUser(data.user.id);
@@ -100,15 +152,7 @@ export const authApi = {
             console.warn('[authApi] Firestore user fetch error:', e);
           }
 
-          let finalRole = firestoreUser?.role || data.user.role;
-          const isAdminEmail =
-            cleanEmail === 'teamdevstudiont@gmail.com' ||
-            cleanEmail === 'eunyool100208@gmail.com' ||
-            cleanEmail === 'deer123424@gmail.com' ||
-            cleanEmail === 'ayun24song@gmail.com';
-          if (isAdminEmail && (!finalRole || finalRole === 'USER')) {
-            finalRole = 'SUPER_ADMIN';
-          }
+          const finalRole = data.user.role;
 
           const resolvedUser: User = firestoreUser
             ? {
@@ -414,6 +458,16 @@ export const authApi = {
       message: data.message || '관리자 직책이 성공적으로 변경되었습니다.',
       user: updatedUser,
     };
+  },
+
+  /** Owner-only: issues a temporary password for a student account and returns it once. */
+  async resetUserPassword(targetUserId: string): Promise<string> {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(targetUserId)}/reset-password`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success || !data.tempPassword) {
+      throw new Error(data.message || '비밀번호 초기화에 실패했습니다.');
+    }
+    return data.tempPassword as string;
   },
 
   /**

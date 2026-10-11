@@ -31,6 +31,18 @@ import {
   WindowCounter,
 } from './discordNotifier';
 import { FirebaseIdTokenClaims, InvalidIdTokenError, verifyFirebaseIdToken } from './firebaseIdToken';
+import {
+  credentialDocId,
+  hashAccountPassword,
+  isAuthSecretConfigured,
+  isValidRoleGrant,
+  issueSessionToken,
+  PasswordRecord,
+  roleGrantDocId,
+  signRoleGrant,
+  verifyAccountPassword,
+  verifySessionToken,
+} from './authSecurity';
 
 dotenv.config();
 
@@ -442,7 +454,7 @@ interface AdminCredential {
 
 const adminCredentialsStore: Record<string, AdminCredential> = {};
 
-// Active sessions map to store issued tokens and role metadata
+// Signed-in user as carried by a verified session token (see authSecurity.ts)
 interface ActiveSession {
   id: string;
   email: string;
@@ -450,7 +462,15 @@ interface ActiveSession {
   role: string;
   createdAt: number;
 }
-const activeSessions: Map<string, ActiveSession> = new Map();
+
+// Roles assigned before signed role grants existed (user id → role).
+const BUILT_IN_ROLE_GRANTS: Record<string, string> = {
+  kakao_5120527092: 'SERVICE_OWNER',
+};
+
+const isAdminRoleTag = (role?: string | null) =>
+  !!role && (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SERVICE_OWNER' || role.endsWith('_MANAGER'));
+const isOwnerRoleTag = (role?: string | null) => role === 'SUPER_ADMIN' || role === 'SERVICE_OWNER';
 
 // Whitelist of valid role tags for server-side RBAC validation
 export const ALLOWED_ROLE_TAGS = [
@@ -560,6 +580,138 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // ==========================================
+  // ACCESS CONTROL
+  // ==========================================
+
+  const withTimeout = <T>(promise: Promise<T>, label: string, ms = 8000) =>
+    Promise.race([
+      promise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms)),
+    ]);
+
+  function getAuthenticatedUser(req: express.Request): ActiveSession | null {
+    const header = String(req.headers.authorization || '');
+    const claims = verifySessionToken(header.replace(/^Bearer\s+/i, '').trim());
+    return claims ? { id: claims.id, email: claims.email, name: claims.name, role: claims.role, createdAt: 0 } : null;
+  }
+
+  // Role assigned by an owner (signed grant), else a built-in grant, else USER. Never read from the
+  // users collection, which anyone can write.
+  async function resolveTrustedRole(userId: string): Promise<string> {
+    try {
+      const snap = await withTimeout(getDoc(doc(fbDb, 'system_settings', roleGrantDocId(userId))), 'Role grant lookup');
+      const grant = snap.exists() ? snap.data() : null;
+      if (isValidRoleGrant(grant, userId)) return grant.role;
+    } catch (e) {
+      console.warn('[Auth] Role grant lookup failed:', e);
+    }
+    return BUILT_IN_ROLE_GRANTS[userId] || 'USER';
+  }
+
+  async function saveRoleGrant(userId: string, role: string, actorId: string) {
+    await withTimeout(
+      setDoc(doc(fbDb, 'system_settings', roleGrantDocId(userId)), {
+        kind: 'role_grant',
+        userId,
+        role,
+        sig: signRoleGrant(userId, role),
+        updatedBy: actorId,
+        updatedAt: new Date().toISOString(),
+      }),
+      'Role grant save'
+    );
+  }
+
+  async function loadPasswordRecord(email: string): Promise<PasswordRecord | null> {
+    const snap = await withTimeout(getDoc(doc(fbDb, 'system_settings', credentialDocId(email))), 'Password lookup');
+    return snap.exists() ? (snap.data() as PasswordRecord) : null;
+  }
+
+  async function savePassword(email: string, password: string) {
+    const record = await hashAccountPassword(email, password);
+    await withTimeout(
+      setDoc(doc(fbDb, 'system_settings', credentialDocId(email)), {
+        kind: 'credential',
+        ...record,
+        updatedAt: new Date().toISOString(),
+      }),
+      'Password save'
+    );
+  }
+
+  // The signed-in user's role, looked up again on each admin request so a revoked role or a
+  // suspension takes effect immediately rather than when the token expires.
+  async function currentRole(session: ActiveSession): Promise<string | null> {
+    const adminAcc = adminCredentialsStore[session.email];
+    // session.role is the role signed at sign-in; only an admin sign-in maps to the built-in admin account.
+    if (adminAcc && ALLOWED_ADMIN_EMAILS.includes(session.email) && isAdminRoleTag(session.role)) {
+      return adminAcc.status === 'suspended' ? null : adminAcc.role;
+    }
+    return resolveTrustedRole(session.id);
+  }
+
+  // Management endpoints: admin role required.
+  const ADMIN_ROUTES: Array<[string, RegExp]> = [
+    ['*', /^\/videos\/upload/],
+    ['DELETE', /^\/videos\//],
+    ['POST', /^\/videos\/validate-url$/],
+    ['GET', /^\/videos\/check-duplicate$/],
+    ['POST', /^\/settings\//],
+    ['GET', /^\/auth\/admins$/],
+    ['*', /^\/admin\//],
+    ['POST', /^\/achievements\//],
+    ['*', /^\/me\/custom-frames/],
+  ];
+  // Writes open to signed-out visitors (sign-in itself, and the rate-limited fixed-format alerts).
+  const PUBLIC_WRITE_ROUTES: Array<[string, RegExp]> = [
+    ['POST', /^\/auth\/(login|register)$/],
+    ['POST', /^\/auth\/(google\/verify|kakao\/exchange|naver\/exchange)$/],
+    ['POST', /^\/notify\/event$/],
+  ];
+  // Reads of personal data.
+  const PRIVATE_READ_ROUTES: Array<[string, RegExp]> = [['GET', /^\/progress/]];
+
+  const routeMatches = (rules: Array<[string, RegExp]>, method: string, routePath: string) =>
+    rules.some(([m, re]) => (m === '*' || m === method) && re.test(routePath));
+
+  // Every other write needs a signed session; public content (courses, videos, avatars) stays readable.
+  app.use('/api', async (req, res, next) => {
+    try {
+      const routePath = req.path;
+      const method = req.method.toUpperCase();
+      const needsAdmin = routeMatches(ADMIN_ROUTES, method, routePath);
+      const isRead = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+      const needsLogin =
+        needsAdmin ||
+        (isRead ? routeMatches(PRIVATE_READ_ROUTES, method, routePath) : !routeMatches(PUBLIC_WRITE_ROUTES, method, routePath));
+      if (!needsLogin) return next();
+
+      const session = getAuthenticatedUser(req);
+      if (!session) {
+        return res.status(401).json({ success: false, message: '로그인이 필요합니다. 다시 로그인해 주세요.' });
+      }
+
+      const actingForOthers =
+        routePath.startsWith('/progress') &&
+        !!String((req.body && req.body.userId) || req.query.userId || '') &&
+        String((req.body && req.body.userId) || req.query.userId) !== session.id;
+
+      if (needsAdmin || actingForOthers) {
+        const role = await currentRole(session);
+        if (!isAdminRoleTag(role)) {
+          return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+        }
+        session.role = role!;
+      }
+      res.locals.session = session;
+      return next();
+    } catch (err) {
+      console.error('[Auth] Access check failed:', err);
+      return res.status(500).json({ success: false, message: '권한 확인 중 오류가 발생했습니다.' });
+    }
+  });
 
   // API Health check
   app.get('/api/health', (req, res) => {
@@ -696,18 +848,29 @@ async function startServer() {
     const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
     const v = (key: string, max = 120) => String(d[key] ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
+    // Inquiry notices are built from the stored inquiry, so signed-out visitors may send them. Every
+    // other kind needs a session, admin kinds need an admin, and names come from the session.
+    const session = getAuthenticatedUser(req);
+    if (kind !== 'inquiry') {
+      if (!session) return res.status(401).json({ sent: false, reason: 'login_required' });
+      if ((kind === 'assignment' || kind === 'admin_action' || kind === 'test') && !isAdminRoleTag(await currentRole(session))) {
+        return res.status(403).json({ sent: false, reason: 'forbidden' });
+      }
+    }
+    const who = session?.name || session?.email || '-';
+
     let message: (DiscordMessage & { category: DiscordCategory }) | null = null;
     switch (kind) {
       case 'enrollment':
         message = {
           category: 'enrollment',
           title: '🙋 새 수강 신청',
-          description: `**${v('userName')}**님이 새 강의를 듣기 시작했어요! 🚀`,
+          description: `**${who}**님이 새 강의를 듣기 시작했어요! 🚀`,
           fields: [
-            { name: '👤 수강생', value: v('userName') },
+            { name: '👤 수강생', value: who },
             { name: '📘 강의', value: v('courseTitle') },
           ],
-          dedupeKey: `enroll:${v('userId')}:${v('courseId')}`,
+          dedupeKey: `enroll:${session!.id}:${v('courseId')}`,
         };
         break;
       case 'assignment':
@@ -715,20 +878,20 @@ async function startServer() {
           category: 'enrollment',
           title: '🗂️ 수강 배정 완료',
           description: `📌 ${v('details', 300) || '관리자가 수강을 배정했어요.'}`,
-          fields: [{ name: '🧑‍💼 관리자', value: v('actorName') }],
+          fields: [{ name: '🧑‍💼 관리자', value: who }],
         };
         break;
       case 'completion':
         message = {
           category: 'completion',
           title: '🎉 과정 수료!',
-          description: `**${v('userName')}**님이 과정을 끝까지 완주했어요 👏`,
+          description: `**${who}**님이 과정을 끝까지 완주했어요 👏`,
           fields: [
-            { name: '👤 수료생', value: v('userName') },
+            { name: '👤 수료생', value: who },
             { name: '📘 과정', value: v('courseTitle') },
           ],
           note: '수료증 조회에서 발급 내역을 볼 수 있어요',
-          dedupeKey: `complete:${v('userId')}:${v('courseId')}`,
+          dedupeKey: `complete:${session!.id}:${v('courseId')}`,
         };
         break;
       case 'inquiry': {
@@ -750,7 +913,7 @@ async function startServer() {
           category: 'security',
           title: `${action.emoji} 관리 작업 · ${action.label}`,
           description: `📝 ${v('details', 300)}`,
-          fields: [{ name: '🧑‍💼 관리자', value: v('actorName') }],
+          fields: [{ name: '🧑‍💼 관리자', value: who }],
           note: '본인이 한 작업이 아니라면 바로 확인해 주세요',
         };
         break;
@@ -762,13 +925,13 @@ async function startServer() {
           title: '⏩ 건너뛰기 반복 시도',
           description: '⚠️ 아직 보지 않은 구간으로 영상을 넘기려는 시도가 반복됐어요.',
           fields: [
-            { name: '👤 사용자', value: v('userName') },
+            { name: '👤 사용자', value: who },
             { name: '📘 강의', value: v('courseTitle') },
             { name: '🎬 차시', value: v('lessonTitle') },
             { name: '🔁 시도 횟수', value: `${v('count')}회` },
           ],
           note: '진도는 실제로 본 구간만 인정돼요',
-          dedupeKey: `suspicious:seek_skip:${v('userId')}:${v('lessonId')}`,
+          dedupeKey: `suspicious:seek_skip:${session!.id}:${v('lessonId')}`,
         };
         break;
       }
@@ -780,7 +943,7 @@ async function startServer() {
           title: '✅ 연결 테스트',
           description: '🎉 TDSNT LMS 알림이 이 채널과 잘 연결됐어요!\n앞으로 켜 둔 알림이 여기로 와요.',
           fields: [
-            { name: '🙋 보낸 사람', value: v('actorName') || '-' },
+            { name: '🙋 보낸 사람', value: who },
             { name: '🔔 알림 종류', value: '📚 수강 · 🎓 수료 · 💬 문의 · 🚨 보안', inline: false },
           ],
         });
@@ -797,47 +960,22 @@ async function startServer() {
 
   // Server-side detections
   const adminLoginFailures = new WindowCounter(15 * 60 * 1000);
+  const studentLoginFailures = new WindowCounter(15 * 60 * 1000);
+  // Wrong passwords allowed per account within 15 minutes before sign-in is refused.
+  const LOGIN_FAILURE_LIMIT = 10;
   const spoofedHeartbeats = new WindowCounter(30 * 60 * 1000);
 
-  // API Auth Session Verification Endpoint
-  app.get('/api/auth/session', (req, res) => {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    if (!token) {
-      return res.status(401).json({ success: false, valid: false, message: '인증 토큰이 없습니다.' });
+  // API Auth Session Verification Endpoint: only tokens signed by this server are valid.
+  app.get('/api/auth/session', async (req, res) => {
+    const session = getAuthenticatedUser(req);
+    if (!session) {
+      return res.status(401).json({ success: false, valid: false, message: '로그인이 만료되었습니다. 다시 로그인해 주세요.' });
     }
-
-    const session = activeSessions.get(token);
-    if (session) {
-      return res.json({
-        success: true,
-        valid: true,
-        role: session.role,
-        userId: session.id,
-      });
+    const role = await currentRole(session);
+    if (!role) {
+      return res.status(403).json({ success: false, valid: false, message: '이용이 정지된 계정입니다.' });
     }
-
-    if (token.startsWith('tdsnt_jwt_sa_')) {
-      return res.json({
-        success: true,
-        valid: true,
-        role: 'SUPER_ADMIN',
-      });
-    }
-
-    if (token.startsWith('tdsnt_jwt_usr_') || token.startsWith('tdsnt_token_')) {
-      return res.json({
-        success: true,
-        valid: true,
-        role: 'USER',
-      });
-    }
-
-    return res.json({
-      success: true,
-      valid: true,
-    });
+    return res.json({ success: true, valid: true, role, userId: session.id });
   });
 
   // ==========================================
@@ -978,7 +1116,10 @@ async function startServer() {
     // Only an address Kakao has verified may unlock an admin account.
     const isProtectedAdmin =
       userData.kakao_account?.is_email_verified === true && ALLOWED_ADMIN_EMAILS.includes(email.toLowerCase());
-    const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : (existingUser?.role || 'USER');
+    const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : await resolveTrustedRole(userId);
+    if (String(existingUser?.status || '').toLowerCase() === 'suspended') {
+      throw new Error('이용이 정지된 계정입니다. 관리자에게 문의해 주세요.');
+    }
 
     const resolvedUser = {
       id: userId,
@@ -1005,15 +1146,8 @@ async function startServer() {
       }
     }
 
-    // Issue session token
-    const token = `tdsnt_jwt_usr_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-    activeSessions.set(token, {
-      id: resolvedUser.id,
-      email: resolvedUser.email,
-      name: resolvedUser.name,
-      role: resolvedUser.role,
-      createdAt: Date.now(),
-    });
+    // The session carries the address Kakao returned, never the one stored in Firestore.
+    const token = issueSessionToken({ id: resolvedUser.id, email, name: resolvedUser.name, role: resolvedUser.role });
 
     return { user: resolvedUser, token };
   }
@@ -1066,7 +1200,7 @@ async function startServer() {
 
   // Code Exchange endpoint for SDK / Single-Page requests
   app.post('/api/auth/kakao/exchange', async (req, res) => {
-    const { code, redirectUri, clientId } = req.body || {};
+    const { code, redirectUri } = req.body || {};
     if (!code) {
       return res.status(400).json({ success: false, message: '인증 코드가 누락되었습니다.' });
     }
@@ -1075,7 +1209,7 @@ async function startServer() {
     const targetRedirectUri = redirectUri || cfg.redirectUri;
 
     try {
-      const userData = await exchangeKakaoAuthCode(code, targetRedirectUri, cfg.clientSecret, clientId || cfg.clientId);
+      const userData = await exchangeKakaoAuthCode(code, targetRedirectUri, cfg.clientSecret, cfg.clientId);
       const authResult = await handleKakaoUserLogin(userData);
       return res.json({
         success: true,
@@ -1350,8 +1484,12 @@ async function startServer() {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const isProtectedAdmin = ALLOWED_ADMIN_EMAILS.includes(cleanEmail);
-    const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : (existingUser?.role || 'USER');
+    // Naver does not say whether the address is verified, so a Naver sign-in never unlocks an admin
+    // account; admins sign in with their password or Google.
+    const finalRole = await resolveTrustedRole(userId);
+    if (String(existingUser?.status || '').toLowerCase() === 'suspended') {
+      throw new Error('이용이 정지된 계정입니다. 관리자에게 문의해 주세요.');
+    }
 
     const resolvedUser = {
       id: userId,
@@ -1376,14 +1514,7 @@ async function startServer() {
       }
     }
 
-    const token = `tdsnt_jwt_usr_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-    activeSessions.set(token, {
-      id: resolvedUser.id,
-      email: resolvedUser.email,
-      name: resolvedUser.name,
-      role: resolvedUser.role,
-      createdAt: Date.now(),
-    });
+    const token = issueSessionToken({ id: resolvedUser.id, email: cleanEmail, name: resolvedUser.name, role: resolvedUser.role });
 
     return { user: resolvedUser, token };
   }
@@ -1437,7 +1568,7 @@ async function startServer() {
 
   // Code Exchange endpoint for Naver
   app.post('/api/auth/naver/exchange', async (req, res) => {
-    const { code, state, redirectUri, clientId } = req.body || {};
+    const { code, state, redirectUri } = req.body || {};
     if (!code) {
       return res.status(400).json({ success: false, message: '인증 코드가 누락되었습니다.' });
     }
@@ -1446,7 +1577,7 @@ async function startServer() {
     const targetRedirectUri = redirectUri || cfg.redirectUri;
 
     try {
-      const naverUser = await exchangeNaverAuthCode(code, state || '', targetRedirectUri, cfg.clientSecret, clientId || cfg.clientId);
+      const naverUser = await exchangeNaverAuthCode(code, state || '', targetRedirectUri, cfg.clientSecret, cfg.clientId);
       const authResult = await handleNaverUserLogin(naverUser);
       return res.json({
         success: true,
@@ -1663,7 +1794,10 @@ async function startServer() {
     }
 
     const isProtectedAdmin = claims.email_verified === true && ALLOWED_ADMIN_EMAILS.includes(cleanEmail);
-    const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : (existingUser?.role || 'USER');
+    const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : await resolveTrustedRole(userId);
+    if (String(existingUser?.status || '').toLowerCase() === 'suspended') {
+      return res.status(403).json({ success: false, message: '이용이 정지된 계정입니다. 관리자에게 문의해 주세요.' });
+    }
 
     const resolvedUser = {
       id: userId,
@@ -1690,14 +1824,8 @@ async function startServer() {
       }
     }
 
-    const token = `tdsnt_jwt_usr_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-    activeSessions.set(token, {
-      id: resolvedUser.id,
-      email: resolvedUser.email,
-      name: resolvedUser.name,
-      role: resolvedUser.role,
-      createdAt: Date.now(),
-    });
+    // The session carries the address from the verified token, never the one stored in Firestore.
+    const token = issueSessionToken({ id: resolvedUser.id, email: cleanEmail, name: resolvedUser.name, role: resolvedUser.role });
 
     // Admin sign-ins through Google are posted like password sign-ins, so a login by someone else is noticed.
     if (isProtectedAdmin) {
@@ -1775,13 +1903,28 @@ async function startServer() {
         return res.status(403).json({ success: false, message: '이용이 정지된 관리자 계정입니다. 시스템 총괄자에게 문의하세요.' });
       }
 
-      // Verify exact password (and trimmed fallback in case of user pasting)
-      const isMatch = verifyPassword(rawPassword, adminAcc.hash, adminAcc.salt) ||
-                      verifyPassword(rawPassword.trim(), adminAcc.hash, adminAcc.salt);
+      if (adminLoginFailures.count(cleanEmail) >= LOGIN_FAILURE_LIMIT) {
+        return res.status(429).json({ success: false, message: '로그인 실패가 너무 많습니다. 15분 뒤에 다시 시도해 주세요.' });
+      }
+
+      // A password changed in account settings is stored (peppered) in Firestore; until then the
+      // INITIAL_ADMIN_PASSWORD applies. Exact and trimmed input are both accepted (pasted passwords).
+      let storedRecord: PasswordRecord | null = null;
+      try {
+        storedRecord = isAuthSecretConfigured() ? await loadPasswordRecord(cleanEmail) : null;
+      } catch (e) {
+        console.warn('[Auth] Admin password lookup failed:', e);
+        return res.status(503).json({ success: false, message: '로그인 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+      }
+      const isMatch = storedRecord
+        ? (await verifyAccountPassword(cleanEmail, rawPassword, storedRecord)) ||
+          (await verifyAccountPassword(cleanEmail, rawPassword.trim(), storedRecord))
+        : verifyPassword(rawPassword, adminAcc.hash, adminAcc.salt) ||
+          verifyPassword(rawPassword.trim(), adminAcc.hash, adminAcc.salt);
 
       if (!isMatch) {
         const failures = adminLoginFailures.hit(cleanEmail);
-        if (failures === 5 || failures === 20) {
+        if (failures === 5 || failures === LOGIN_FAILURE_LIMIT) {
           notifyDiscord({
             category: 'security',
             title: '🚫 관리자 로그인 실패 반복',
@@ -1798,18 +1941,10 @@ async function startServer() {
       }
 
       // Success: Issue admin session token
-      const token = `tdsnt_jwt_sa_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
       const customProfile = userProfilesStore[cleanEmail] || userProfilesStore[adminAcc.id] || {};
-      const finalRole = customProfile.role || adminAcc.role;
+      const finalRole = adminAcc.role;
       const finalName = customProfile.name || adminAcc.name;
-
-      activeSessions.set(token, {
-        id: adminAcc.id,
-        email: adminAcc.email,
-        name: finalName,
-        role: finalRole,
-        createdAt: Date.now(),
-      });
+      const token = issueSessionToken({ id: adminAcc.id, email: cleanEmail, name: finalName, role: finalRole });
 
       // Every admin sign-in is posted so a login by someone else is noticed quickly.
       notifyDiscord({
@@ -1842,8 +1977,14 @@ async function startServer() {
 
     // Student (General User) Account Login. The account must already exist in the users collection
     // (written at sign-up): its stored id is reused on every sign-in, and a mistyped address is rejected
-    // instead of silently opening a new, empty account. Student passwords are not stored yet, so they
-    // are not checked here.
+    // instead of silently opening a new, empty account. The password is checked against the peppered
+    // record saved at sign-up.
+    if (studentLoginFailures.count(cleanEmail) >= LOGIN_FAILURE_LIMIT) {
+      return res.status(429).json({ success: false, message: '로그인 실패가 너무 많습니다. 15분 뒤에 다시 시도해 주세요.' });
+    }
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '로그인 서버 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
+    }
     let accounts: any[];
     try {
       accounts = await findAccountsByEmail(cleanEmail);
@@ -1864,19 +2005,26 @@ async function startServer() {
       return res.status(403).json({ success: false, message: '이용이 정지된 계정입니다. 관리자에게 문의해 주세요.' });
     }
 
+    let passwordRecord: PasswordRecord | null;
+    try {
+      passwordRecord = await loadPasswordRecord(cleanEmail);
+    } catch (e) {
+      console.warn('[Auth] Password lookup failed:', e);
+      return res.status(503).json({ success: false, message: '로그인 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    if (!passwordRecord) {
+      return res.status(401).json({ success: false, message: '비밀번호가 설정되지 않은 계정입니다. 관리자에게 비밀번호 초기화를 요청해 주세요.' });
+    }
+    if (!(await verifyAccountPassword(cleanEmail, rawPassword, passwordRecord))) {
+      studentLoginFailures.hit(cleanEmail);
+      return res.status(401).json({ success: false, message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+    }
+
     const userId: string = account.id;
     const customProfile = userProfilesStore[cleanEmail] || userProfilesStore[userId] || {};
-    const userToken = `tdsnt_jwt_usr_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
     const studentName = customProfile.name || account.name || cleanEmail.split('@')[0];
-    const studentRole = customProfile.role || 'USER';
-
-    activeSessions.set(userToken, {
-      id: userId,
-      email: cleanEmail,
-      name: studentName,
-      role: studentRole,
-      createdAt: Date.now(),
-    });
+    const studentRole = await resolveTrustedRole(userId);
+    const userToken = issueSessionToken({ id: userId, email: cleanEmail, name: studentName, role: studentRole });
 
     return res.json({
       success: true,
@@ -1894,78 +2042,70 @@ async function startServer() {
     });
   });
 
-  // Sync user profile across sessions
+  // Sync the signed-in user's own name/avatar into the server cache. Roles and status are not
+  // accepted here: roles change only through the owner-only role endpoint.
   app.post('/api/user/sync-profile', (req, res) => {
-    const { id, email, name, role, avatar, status } = req.body || {};
-    if (email) {
-      const clean = email.toLowerCase();
-      const isAdminAccount = ALLOWED_ADMIN_EMAILS.includes(clean);
-      // Strictly prevent demoting protected admin accounts to USER
-      const safeRole = (isAdminAccount && role === 'USER') ? undefined : role;
-
-      userProfilesStore[clean] = {
-        ...userProfilesStore[clean],
-        ...(id ? { id } : {}),
-        ...(name ? { name } : {}),
-        ...(safeRole ? { role: safeRole } : {}),
-        ...(avatar !== undefined ? { avatar } : {}),
-        ...(status ? { status } : {}),
-      };
-      if (adminCredentialsStore[clean]) {
-        if (name) adminCredentialsStore[clean].name = name;
-        if (safeRole && safeRole !== 'USER') adminCredentialsStore[clean].role = safeRole;
-        if (avatar !== undefined) adminCredentialsStore[clean].avatar = avatar;
-        if (status) adminCredentialsStore[clean].status = status;
+    const session = res.locals.session as ActiveSession;
+    const { name, avatar } = req.body || {};
+    const update = {
+      ...(name ? { name: String(name).slice(0, 60) } : {}),
+      ...(avatar !== undefined ? { avatar } : {}),
+    };
+    userProfilesStore[session.id] = { ...userProfilesStore[session.id], id: session.id, ...update };
+    if (session.email) {
+      userProfilesStore[session.email] = { ...userProfilesStore[session.email], id: session.id, ...update };
+      const adminAcc = adminCredentialsStore[session.email];
+      if (adminAcc && adminAcc.id === session.id) {
+        if (update.name) adminAcc.name = update.name;
+        if (avatar !== undefined) adminAcc.avatar = avatar;
       }
-    }
-    if (id) {
-      const existingUser = Object.values(userProfilesStore).find((u) => u && u.id === id);
-      const isTargetAdmin = (existingUser?.email && ALLOWED_ADMIN_EMAILS.includes(existingUser.email.toLowerCase())) ||
-                            Object.values(adminCredentialsStore).some((a) => a.id === id);
-      const safeRole = (isTargetAdmin && role === 'USER') ? undefined : role;
-
-      userProfilesStore[id] = {
-        ...userProfilesStore[id],
-        ...(name ? { name } : {}),
-        ...(safeRole ? { role: safeRole } : {}),
-        ...(avatar !== undefined ? { avatar } : {}),
-        ...(status ? { status } : {}),
-      };
     }
     res.json({ success: true });
   });
 
-  // API Auth Change Password Endpoint (Admin password change)
-  app.post('/api/auth/change-password', (req, res) => {
+  // Whether `password` is the account's current password (stored record, else the initial admin password).
+  async function isCurrentPassword(email: string, password: string): Promise<boolean> {
+    const record = isAuthSecretConfigured() ? await loadPasswordRecord(email) : null;
+    if (record) {
+      return (await verifyAccountPassword(email, password, record)) || (await verifyAccountPassword(email, password.trim(), record));
+    }
+    const adminAcc = ALLOWED_ADMIN_EMAILS.includes(email) ? adminCredentialsStore[email] : null;
+    return !!adminAcc && (verifyPassword(password, adminAcc.hash, adminAcc.salt) || verifyPassword(password.trim(), adminAcc.hash, adminAcc.salt));
+  }
+
+  // API Auth Change Password Endpoint: the signed-in user changes their own password. The new
+  // password is stored (peppered) in Firestore, so it survives server restarts.
+  app.post('/api/auth/change-password', async (req, res) => {
+    const session = res.locals.session as ActiveSession;
     const { email, currentPassword, newPassword } = req.body || {};
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanEmail = String(email || session.email || '').trim().toLowerCase();
     const currentPw = currentPassword != null ? String(currentPassword) : '';
     const newPw = newPassword != null ? String(newPassword) : '';
 
-    if (!ALLOWED_ADMIN_EMAILS.includes(cleanEmail)) {
-      return res.status(403).json({ success: false, message: '관리자 허용 계정만 이 경로로 비밀번호를 변경할 수 있습니다.' });
+    if (!cleanEmail || cleanEmail !== session.email) {
+      return res.status(403).json({ success: false, message: '본인 계정의 비밀번호만 변경할 수 있습니다.' });
+    }
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
+    }
+    const failures = ALLOWED_ADMIN_EMAILS.includes(cleanEmail) ? adminLoginFailures : studentLoginFailures;
+    if (failures.count(cleanEmail) >= LOGIN_FAILURE_LIMIT) {
+      return res.status(429).json({ success: false, message: '비밀번호 확인 실패가 너무 많습니다. 15분 뒤에 다시 시도해 주세요.' });
     }
 
-    const adminAcc = adminCredentialsStore[cleanEmail];
-    if (!adminAcc) {
-      return res.status(404).json({ success: false, message: '해당 관리자 계정을 찾을 수 없습니다.' });
+    try {
+      if (!(await isCurrentPassword(cleanEmail, currentPw))) {
+        failures.hit(cleanEmail);
+        return res.status(401).json({ success: false, message: '현재 사용 중인 비밀번호가 일치하지 않습니다.' });
+      }
+      if (!newPw || newPw.length < 8) {
+        return res.status(400).json({ success: false, message: '새 비밀번호는 최소 8자 이상이어야 합니다.' });
+      }
+      await savePassword(cleanEmail, newPw);
+    } catch (e) {
+      console.warn('[Auth] Password change failed:', e);
+      return res.status(503).json({ success: false, message: '비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' });
     }
-
-    const isMatch = verifyPassword(currentPw, adminAcc.hash, adminAcc.salt) ||
-                    verifyPassword(currentPw.trim(), adminAcc.hash, adminAcc.salt);
-
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: '현재 사용 중인 비밀번호가 일치하지 않습니다.' });
-    }
-
-    if (!newPw || newPw.length < 6) {
-      return res.status(400).json({ success: false, message: '새 비밀번호는 최소 6자 이상이어야 합니다.' });
-    }
-
-    // Re-hash with fresh salt
-    const { hash, salt } = hashPassword(newPw);
-    adminAcc.hash = hash;
-    adminAcc.salt = salt;
 
     return res.json({
       success: true,
@@ -2051,17 +2191,13 @@ async function startServer() {
 
   // API Equip Achievement Decoration with Server-side Role Validation
   app.post('/api/me/equipped-achievement', (req, res) => {
-    const { userId, achievementId, role } = req.body || {};
+    const { userId, achievementId } = req.body || {};
     if (!userId) {
       return res.status(400).json({ success: false, message: '사용자 식별자가 필요합니다.' });
     }
 
-    // Role-based security validation for admin-only achievements and custom frames
-    const isAdmin =
-      role === 'ADMIN' ||
-      role === 'SUPER_ADMIN' ||
-      role === 'SERVICE_OWNER' ||
-      (typeof role === 'string' && role.endsWith('_MANAGER'));
+    // Role-based security validation for admin-only achievements and custom frames (role from the session)
+    const isAdmin = isAdminRoleTag((res.locals.session as ActiveSession).role);
     if (achievementId && (achievementId.startsWith('badge_admin_') || achievementId.includes('admin') || achievementId.startsWith('custom_frame_'))) {
       if (!isAdmin) {
         return res.status(403).json({
@@ -2081,13 +2217,13 @@ async function startServer() {
   });
 
   // API Update Email (Service Owner / Admin)
-  app.post('/api/me/email', (req, res) => {
-    const { userId, email, role } = req.body || {};
+  app.post('/api/me/email', async (req, res) => {
+    const { userId, email } = req.body || {};
     if (!userId || !email) {
       return res.status(400).json({ success: false, message: '사용자 ID와 새로운 이메일 주소가 필요합니다.' });
     }
     const cleanEmail = String(email).trim().toLowerCase();
-    const isServiceOwner = role === 'SUPER_ADMIN' || role === 'SERVICE_OWNER';
+    const isServiceOwner = isOwnerRoleTag(await currentRole(res.locals.session as ActiveSession));
     if (!isServiceOwner) {
       return res.status(403).json({ success: false, message: '이메일 변경은 총괄 관리자만 가능합니다.' });
     }
@@ -2219,56 +2355,6 @@ async function startServer() {
     });
   });
 
-  // Helper: Resolve authenticated user from Authorization header or active sessions
-  function getAuthenticatedUser(req: express.Request): ActiveSession | null {
-    const authHeader = (req.headers['authorization'] || '') as string;
-    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : '';
-
-    if (token && activeSessions.has(token)) {
-      const session = activeSessions.get(token)!;
-      const customProfile = userProfilesStore[session.email] || userProfilesStore[session.id] || {};
-      const adminAcc = adminCredentialsStore[session.email];
-      return {
-        ...session,
-        name: customProfile.name || adminAcc?.name || session.name,
-        role: customProfile.role || adminAcc?.role || session.role,
-      };
-    }
-
-    // Token fallback inspection for admin session tokens
-    if (token && (token.startsWith('tdsnt_jwt_sa_') || token.startsWith('tdsnt_jwt_'))) {
-      const actorEmail = (((req.headers['x-actor-email'] || req.headers['x-user-email']) as string) || '').toLowerCase().trim();
-      const actorId = ((req.headers['x-actor-id'] || req.headers['x-user-id']) as string) || '';
-
-      for (const [email, admin] of Object.entries(adminCredentialsStore)) {
-        if ((actorEmail && email === actorEmail) || (actorId && admin.id === actorId)) {
-          const custom = userProfilesStore[email] || userProfilesStore[admin.id] || {};
-          return {
-            id: admin.id,
-            email: admin.email,
-            name: custom.name || admin.name,
-            role: custom.role || admin.role,
-            createdAt: Date.now(),
-          };
-        }
-      }
-
-      // Default fallback for primary owner if no actor header
-      const defaultAdmin = adminCredentialsStore['teamdevstudiont@gmail.com'];
-      if (defaultAdmin && token.startsWith('tdsnt_jwt_sa_')) {
-        const custom = userProfilesStore['teamdevstudiont@gmail.com'] || userProfilesStore[defaultAdmin.id] || {};
-        return {
-          id: defaultAdmin.id,
-          email: defaultAdmin.email,
-          name: custom.name || defaultAdmin.name,
-          role: custom.role || defaultAdmin.role,
-          createdAt: Date.now(),
-        };
-      }
-    }
-    return null;
-  }
-
   // API Get Admin List
   app.get('/api/auth/admins', (req, res) => {
     const list = ALLOWED_ADMIN_EMAILS.map((email) => {
@@ -2292,7 +2378,7 @@ async function startServer() {
   });
 
   // Strict Server-Side RBAC Admin Role/TAG Update Endpoint (Requirements 5, 6, 7, 8, 9, 10)
-  const handleAdminRoleUpdate = (req: express.Request, res: express.Response) => {
+  const handleAdminRoleUpdate = async (req: express.Request, res: express.Response) => {
     const { userId } = req.params;
     const { role: newRole } = req.body || {};
 
@@ -2305,8 +2391,8 @@ async function startServer() {
       });
     }
 
-    // 2. Strict Role Check: ONLY SERVICE_OWNER (or legacy SUPER_ADMIN) is allowed
-    const isOwner = authUser.role === 'SERVICE_OWNER' || authUser.role === 'SUPER_ADMIN';
+    // 2. Strict Role Check: ONLY SERVICE_OWNER (or legacy SUPER_ADMIN) is allowed (current role, not the token's)
+    const isOwner = isOwnerRoleTag(await currentRole(authUser));
     if (!isOwner) {
       return res.status(403).json({
         success: false,
@@ -2383,10 +2469,14 @@ async function startServer() {
       targetAdminAcc.role = newRole;
     }
 
-    // Also update any active session tokens for the target user
-    for (const session of activeSessions.values()) {
-      if (session.id === userId || (targetEmail && session.email === targetEmail)) {
-        session.role = newRole;
+    // Persist as a signed grant so the role survives restarts and cannot be forged through Firestore.
+    // Built-in admin accounts keep their role in the server's admin store instead.
+    if (!targetAdminAcc) {
+      try {
+        await saveRoleGrant(userId, newRole, authUser.id);
+      } catch (e) {
+        console.warn('[RBAC] Saving role grant failed:', e);
+        return res.status(503).json({ success: false, message: '권한 변경을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' });
       }
     }
 
@@ -2422,6 +2512,61 @@ async function startServer() {
 
   app.patch('/api/admin/users/:userId/role', handleAdminRoleUpdate);
   app.post('/api/admin/users/:userId/role', handleAdminRoleUpdate);
+
+  // Owner-only: give a student a new temporary password (shown once to the owner, who passes it on).
+  app.post('/api/admin/users/:userId/reset-password', async (req, res) => {
+    const authUser = res.locals.session as ActiveSession;
+    if (!isOwnerRoleTag(await currentRole(authUser))) {
+      return res.status(403).json({ success: false, message: '비밀번호 초기화는 서비스 총괄만 할 수 있습니다.' });
+    }
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다.' });
+    }
+    const { userId } = req.params;
+    try {
+      const snap = await withTimeout(getDoc(doc(fbDb, 'users', userId)), 'User lookup');
+      const target = snap.exists() ? (snap.data() as any) : null;
+      const email = String(target?.email || '').toLowerCase();
+      if (!target || !email) {
+        return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+      }
+      if (ALLOWED_ADMIN_EMAILS.includes(email)) {
+        return res.status(400).json({ success: false, message: '관리자 계정 비밀번호는 본인이 계정 설정에서 변경해야 합니다.' });
+      }
+      if (SNS_PROVIDER_NAMES[target.provider]) {
+        return res.status(400).json({ success: false, message: `${SNS_PROVIDER_NAMES[target.provider]} 로그인 계정이라 비밀번호가 없습니다.` });
+      }
+      // 12 characters from an alphabet without look-alikes (0/O, 1/l/I).
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+      const tempPassword = Array.from(crypto.randomBytes(12), (b) => alphabet[b % alphabet.length]).join('');
+      await savePassword(email, tempPassword);
+
+      serverAuditLogs.unshift({
+        id: `audit_pw_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+        actorId: authUser.id,
+        actorName: authUser.name || '서비스 총괄',
+        targetUserId: userId,
+        targetUserName: target.name || email,
+        action: 'RESET_PASSWORD',
+        details: '임시 비밀번호 발급',
+        timestamp: new Date().toISOString(),
+      });
+      notifyDiscord({
+        category: 'security',
+        title: '🔑 비밀번호 초기화',
+        description: `**${authUser.name || authUser.email}** 님이 수강생 비밀번호를 초기화했어요.`,
+        fields: [
+          { name: '👤 대상', value: email },
+          { name: '🌐 IP', value: clientIp(req) },
+        ],
+      }).catch(() => {});
+
+      return res.json({ success: true, tempPassword, email });
+    } catch (e) {
+      console.warn('[Auth] Password reset failed:', e);
+      return res.status(503).json({ success: false, message: '비밀번호를 초기화하지 못했습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+  });
 
   // API Auth Register Endpoint
   app.post('/api/auth/register', async (req, res) => {
@@ -2460,8 +2605,12 @@ async function startServer() {
       });
     }
 
-    if (!password || password.length < 6) {
-      return res.status(400).json({ success: false, message: '비밀번호는 최소 6자 이상이어야 합니다.' });
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ success: false, message: '비밀번호는 최소 8자 이상이어야 합니다.' });
+    }
+
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '회원가입 서버 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
     }
 
     if (!agreements?.terms || !agreements?.privacy) {
@@ -2488,7 +2637,7 @@ async function startServer() {
     // Strictly enforce USER (student) role for registrations (no dummy avatar)
     const now = new Date().toISOString();
     const newUser = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: `usr_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
       name: cleanName,
       email: cleanEmail,
       role: 'USER',
@@ -2497,15 +2646,17 @@ async function startServer() {
       agreements: { terms: now, privacy: now },
     };
 
-    // Stored here (not only by the browser) so the account can sign in even if the client's own save fails.
+    // Password first, then the account (stored here, not only by the browser), so a failure never
+    // leaves an account that cannot sign in.
     try {
+      await savePassword(cleanEmail, String(password));
       await setDoc(doc(fbDb, 'users', newUser.id), newUser, { merge: true });
     } catch (e) {
       console.warn('[Auth] Saving new account failed:', e);
       return res.status(503).json({ success: false, message: '회원가입 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
     }
 
-    const token = `tdsnt_jwt_usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const token = issueSessionToken({ id: newUser.id, email: cleanEmail, name: cleanName, role: 'USER' });
     return res.json({ success: true, user: newUser, token });
   });
 

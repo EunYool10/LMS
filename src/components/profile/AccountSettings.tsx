@@ -146,8 +146,8 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
       showToast('현재 비밀번호를 입력해주세요.', 'error');
       return;
     }
-    if (newPassword.length < 6) {
-      showToast('새 비밀번호는 6자 이상이어야 합니다.', 'error');
+    if (newPassword.length < 8) {
+      showToast('새 비밀번호는 8자 이상이어야 합니다.', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -493,7 +493,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
                     id="input-new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="최소 6자 이상"
+                    placeholder="최소 8자 이상"
                     className="w-full pl-9 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                     required
                   />
