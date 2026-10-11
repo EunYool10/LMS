@@ -1,14 +1,19 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 
-// Password reset mail, sent through the LMS team's Gmail account (tdshqlms@gmail.com) with a Gmail app
-// password. Env: SMTP_USER (the Gmail address) and SMTP_PASS (16-character app password, spaces allowed).
+// Password reset mail, sent from the LMS team's Gmail account (tdshqlms@gmail.com) in one of two ways:
+// - MAIL_RELAY_URL + MAIL_RELAY_SECRET: a Google Apps Script web app in that account (mail-relay.gs) sends
+//   it over HTTPS. Used on Render, whose free plan blocks outbound SMTP ports.
+// - SMTP_USER + SMTP_PASS (Gmail app password, spaces allowed): direct Gmail SMTP, e.g. locally.
 
 let transporter: Transporter | null = null;
 
 const smtpUser = () => (process.env.SMTP_USER || '').trim();
 const smtpPass = () => (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+const relayUrl = () => (process.env.MAIL_RELAY_URL || '').trim();
+const relaySecret = () => (process.env.MAIL_RELAY_SECRET || '').trim();
 
-export const isMailerConfigured = () => !!smtpUser() && !!smtpPass();
+const useRelay = () => !!relayUrl() && !!relaySecret();
+export const isMailerConfigured = () => useRelay() || (!!smtpUser() && !!smtpPass());
 
 function getTransporter() {
   if (!transporter) {
@@ -17,9 +22,35 @@ function getTransporter() {
       port: 465,
       secure: true,
       auth: { user: smtpUser(), pass: smtpPass() },
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
     });
   }
   return transporter;
+}
+
+interface Mail {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+async function sendViaRelay(mail: Mail) {
+  // Apps Script answers a POST with a redirect to the result; fetch follows it.
+  const res = await fetch(relayUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ secret: relaySecret(), ...mail }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const data: any = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) throw new Error(`Mail relay failed (HTTP ${res.status}): ${data?.error || 'unexpected response'}`);
+}
+
+async function deliver(mail: Mail) {
+  if (useRelay()) return sendViaRelay(mail);
+  await getTransporter().sendMail({ from: { name: 'TDSNT LMS 관리팀', address: smtpUser() }, ...mail });
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -58,11 +89,5 @@ export async function sendPasswordResetMail(to: string, link: string, minutes: n
     'TDSNT LMS 관리팀',
   ].join('\n');
 
-  await getTransporter().sendMail({
-    from: { name: 'TDSNT LMS 관리팀', address: smtpUser() },
-    to,
-    subject: '[TDSNT LMS] 비밀번호 재설정 안내',
-    text,
-    html,
-  });
+  await deliver({ to, subject: '[TDSNT LMS] 비밀번호 재설정 안내', text, html });
 }
