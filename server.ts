@@ -42,12 +42,13 @@ import {
   passwordStamp,
   PasswordRecord,
   roleGrantDocId,
+  sealPublicKey,
   signRoleGrant,
   verifyAccountPassword,
   verifyPasswordResetToken,
   verifySessionToken,
 } from './authSecurity';
-import { isMailerConfigured, sendPasswordResetMail } from './resetMailer';
+import { isMailerConfigured, mailTransport, sendPasswordResetMail } from './resetMailer';
 
 dotenv.config();
 
@@ -721,7 +722,19 @@ async function startServer() {
 
   // API Health check
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', server: 'TDSNTLMS Auth & Learning Core', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      server: 'TDSNTLMS Auth & Learning Core',
+      timestamp: new Date().toISOString(),
+      mail: mailTransport() || 'off',
+    });
+  });
+
+  // Public key for sealing secrets into the repository (scripts/seal.ts, openSealed in authSecurity.ts).
+  app.get('/api/seal-key', (req, res) => {
+    const key = sealPublicKey();
+    if (!key) return res.status(503).json({ success: false, message: 'AUTH_SECRET is not configured.' });
+    return res.json({ success: true, key });
   });
 
   // ==========================================
@@ -3900,6 +3913,7 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`TDSNTLMS Server running on port ${PORT}`);
+    console.log(`[Mail] Password reset mail: ${mailTransport() || 'off — set MAIL_RELAY_SECRET (see resetMailer.ts)'}`);
   });
 }
 

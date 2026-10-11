@@ -3,7 +3,9 @@
 // Render 무료 플랜은 SMTP 포트를 막기 때문에 이렇게 보냅니다.
 //
 // 배포: 배포 → 새 배포 → 유형 "웹 앱", 실행 계정 "나", 액세스 권한 "모든 사용자".
-// SECRET은 서버 환경변수 MAIL_RELAY_SECRET과 같은 값이어야 합니다 (저장소에는 넣지 않음).
+// 웹 앱 주소가 바뀌면 resetMailer.ts의 DEFAULT_RELAY_URL을 고치거나 MAIL_RELAY_URL을 설정합니다.
+// SECRET은 서버의 MAIL_RELAY_SECRET과 같은 값이어야 합니다. Render 환경변수에 없으면 resetMailer.ts의
+// 봉인된 값(서버만 열 수 있음)을 씁니다. 평문은 저장소에 넣지 않습니다.
 
 const SECRET = 'MAIL_RELAY_SECRET 값을 여기에';
 

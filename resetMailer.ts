@@ -1,19 +1,45 @@
 import nodemailer, { type Transporter } from 'nodemailer';
+import { openSealed } from './authSecurity';
 
 // Password reset mail, sent from the LMS team's Gmail account (tdshqlms@gmail.com) in one of two ways:
-// - MAIL_RELAY_URL + MAIL_RELAY_SECRET: a Google Apps Script web app in that account (mail-relay.gs) sends
-//   it over HTTPS. Used on Render, whose free plan blocks outbound SMTP ports.
-// - SMTP_USER + SMTP_PASS (Gmail app password, spaces allowed): direct Gmail SMTP, e.g. locally.
+// - Relay: a Google Apps Script web app in that account (mail-relay.gs) sends it over HTTPS. Used on Render,
+//   whose free plan blocks outbound SMTP ports. Needs the script's shared secret: MAIL_RELAY_SECRET, else
+//   SEALED_RELAY_SECRET below. MAIL_RELAY_URL overrides the web app address.
+// - SMTP_USER + SMTP_PASS (Gmail app password, spaces allowed): direct Gmail SMTP, e.g. locally. Not on Render.
+
+const DEFAULT_RELAY_URL =
+  'https://script.google.com/macros/s/AKfycbyVUeefaXR5HYCiQSUeAIi03S_O1i7EjuKAMa82ynl9a_tdT4Fa6HI88iLqVh6JZdYcYA/exec';
+
+// MAIL_RELAY_SECRET sealed to the production server (see openSealed in authSecurity.ts), used when the Render
+// environment lacks it. It opens only with the AUTH_SECRET it was sealed for; reseal after changing that:
+//   npx tsx scripts/seal.ts https://lms-fi53.onrender.com < secret.txt
+const SEALED_RELAY_SECRET = '';
 
 let transporter: Transporter | null = null;
+let sealedSecretWarned = false;
 
 const smtpUser = () => (process.env.SMTP_USER || '').trim();
 const smtpPass = () => (process.env.SMTP_PASS || '').replace(/\s+/g, '');
-const relayUrl = () => (process.env.MAIL_RELAY_URL || '').trim();
-const relaySecret = () => (process.env.MAIL_RELAY_SECRET || '').trim();
+const relayUrl = () => (process.env.MAIL_RELAY_URL || '').trim() || DEFAULT_RELAY_URL;
 
-const useRelay = () => !!relayUrl() && !!relaySecret();
-export const isMailerConfigured = () => useRelay() || (!!smtpUser() && !!smtpPass());
+function relaySecret(): string {
+  const fromEnv = (process.env.MAIL_RELAY_SECRET || '').trim();
+  if (fromEnv || !SEALED_RELAY_SECRET) return fromEnv;
+  const opened = openSealed(SEALED_RELAY_SECRET);
+  if (!opened && !sealedSecretWarned) {
+    sealedSecretWarned = true;
+    console.warn('[Mail] SEALED_RELAY_SECRET was sealed for another AUTH_SECRET, so the relay is off here (set MAIL_RELAY_SECRET or reseal).');
+  }
+  return opened || '';
+}
+
+/** How reset mail goes out here, or null when it cannot (Render blocks SMTP, so only the relay works there). */
+export function mailTransport(): 'relay' | 'smtp' | null {
+  if (relaySecret()) return 'relay';
+  return smtpUser() && smtpPass() && !process.env.RENDER ? 'smtp' : null;
+}
+
+export const isMailerConfigured = () => !!mailTransport();
 
 function getTransporter() {
   if (!transporter) {
@@ -49,7 +75,7 @@ async function sendViaRelay(mail: Mail) {
 }
 
 async function deliver(mail: Mail) {
-  if (useRelay()) return sendViaRelay(mail);
+  if (mailTransport() === 'relay') return sendViaRelay(mail);
   await getTransporter().sendMail({ from: { name: 'TDSNT LMS 관리팀', address: smtpUser() }, ...mail });
 }
 

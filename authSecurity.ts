@@ -176,3 +176,61 @@ export function isValidRoleGrant(grant: any, userId: string): grant is { role: s
     safeEqual(grant.sig, signRoleGrant(userId, grant.role))
   );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Sealed settings: seal1.<ephemeral key>.<iv>.<ciphertext>, for secrets that have to live in the public
+// repository because they cannot be put in the Render environment. Anyone can seal a value to
+// sealPublicKey() (X25519 + AES-256-GCM); only a server holding the same AUTH_SECRET can open it.
+// ---------------------------------------------------------------------------------------------
+
+const SEAL_PREFIX = 'seal1';
+// PKCS#8 wrapping of a raw 32-byte X25519 private key.
+const X25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b656e04220420', 'hex');
+
+let sealKeys: { privateKey: crypto.KeyObject; publicKey: string } | null = null;
+
+function serverSealKeys() {
+  const secret = configuredSecret();
+  if (!secret) return null;
+  if (!sealKeys) {
+    const seed = Buffer.from(crypto.hkdfSync('sha256', secret, '', 'lms-seal-x25519', 32));
+    const privateKey = crypto.createPrivateKey({ key: Buffer.concat([X25519_PKCS8_PREFIX, seed]), format: 'der', type: 'pkcs8' });
+    sealKeys = { privateKey, publicKey: crypto.createPublicKey(privateKey).export({ format: 'jwk' }).x as string };
+  }
+  return sealKeys;
+}
+
+const x25519PublicKey = (raw: string) => crypto.createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: raw }, format: 'jwk' });
+
+const sealCipherKey = (shared: Buffer, ephemeral: string, recipient: string) =>
+  Buffer.from(crypto.hkdfSync('sha256', shared, `${ephemeral}.${recipient}`, 'lms-seal-v1', 32));
+
+/** This server's sealing key (base64url), or null without AUTH_SECRET. Safe to publish. */
+export const sealPublicKey = () => serverSealKeys()?.publicKey ?? null;
+
+/** Seals a value so that only the server with the given sealing key can open it. */
+export function sealValue(value: string, recipient: string): string {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519');
+  const ephemeral = publicKey.export({ format: 'jwk' }).x as string;
+  const shared = crypto.diffieHellman({ privateKey, publicKey: x25519PublicKey(recipient) });
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', sealCipherKey(shared, ephemeral, recipient), iv);
+  const body = Buffer.concat([cipher.update(value, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+  return [SEAL_PREFIX, ephemeral, iv.toString('base64url'), body.toString('base64url')].join('.');
+}
+
+/** The value inside a sealed setting; null when it was sealed for another AUTH_SECRET or has been altered. */
+export function openSealed(sealed: string): string | null {
+  const keys = serverSealKeys();
+  const [prefix, ephemeral, iv, body, ...rest] = sealed.split('.');
+  if (!keys || prefix !== SEAL_PREFIX || !ephemeral || !iv || !body || rest.length) return null;
+  try {
+    const shared = crypto.diffieHellman({ privateKey: keys.privateKey, publicKey: x25519PublicKey(ephemeral) });
+    const data = Buffer.from(body, 'base64url');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', sealCipherKey(shared, ephemeral, keys.publicKey), Buffer.from(iv, 'base64url'));
+    decipher.setAuthTag(data.subarray(data.length - 16));
+    return Buffer.concat([decipher.update(data.subarray(0, data.length - 16)), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
