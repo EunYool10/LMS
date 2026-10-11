@@ -164,4 +164,9 @@ export class WindowCounter {
     const now = Date.now();
     return (this.hits.get(key) || []).filter((t) => now - t < this.windowMs).length;
   }
+
+  /** Forgets the key's hits (e.g. failed sign-ins after the password was reset). */
+  clear(key: string): void {
+    this.hits.delete(key);
+  }
 }

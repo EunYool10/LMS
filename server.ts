@@ -667,6 +667,7 @@ async function startServer() {
   // Writes open to signed-out visitors (sign-in itself, and the rate-limited fixed-format alerts).
   const PUBLIC_WRITE_ROUTES: Array<[string, RegExp]> = [
     ['POST', /^\/auth\/(login|register)$/],
+    ['POST', /^\/auth\/password-reset\/(check|complete)$/],
     ['POST', /^\/auth\/(google\/verify|kakao\/exchange|naver\/exchange)$/],
     ['POST', /^\/notify\/event$/],
   ];
@@ -2111,6 +2112,115 @@ async function startServer() {
       success: true,
       message: '비밀번호가 성공적으로 변경되었습니다.',
     });
+  });
+
+  // Forgotten passwords: the browser has Firebase Auth email the address a sign-in link, and opening that
+  // link yields a Firebase ID token whose verified email proves the person owns the address. Only then is
+  // a new password stored. Admin addresses are included: owning the mailbox already opens Google sign-in.
+  const passwordResetChecks = new WindowCounter(15 * 60 * 1000);
+  const PASSWORD_RESET_LINK_MAX_AGE_SECONDS = 30 * 60;
+
+  // Why a password cannot be reset for this address, or null when it can. Throws when Firestore is unreachable.
+  async function passwordResetBlocker(cleanEmail: string): Promise<{ status: number; message: string } | null> {
+    if (ALLOWED_ADMIN_EMAILS.includes(cleanEmail)) {
+      const adminAcc = adminCredentialsStore[cleanEmail];
+      if (!adminAcc) return { status: 403, message: '접근 권한이 없는 관리자 계정입니다.' };
+      if (adminAcc.status === 'suspended') return { status: 403, message: '이용이 정지된 관리자 계정입니다. 시스템 총괄자에게 문의하세요.' };
+      return null;
+    }
+    const accounts = await findAccountsByEmail(cleanEmail);
+    const account = accounts.find((a) => !SNS_PROVIDER_NAMES[a.provider]);
+    if (!account) {
+      const snsAccount = accounts.find((a) => SNS_PROVIDER_NAMES[a.provider]);
+      if (snsAccount) {
+        const providerName = SNS_PROVIDER_NAMES[snsAccount.provider];
+        return { status: 400, message: `${providerName} 계정으로 가입한 이메일이라 비밀번호가 없습니다. ${providerName} 로그인 버튼을 이용해 주세요.` };
+      }
+      return { status: 404, message: '가입되지 않은 이메일입니다. 주소를 다시 확인해 주세요.' };
+    }
+    if (String(account.status || '').toLowerCase() === 'suspended') {
+      return { status: 403, message: '이용이 정지된 계정입니다. 관리자에게 문의해 주세요.' };
+    }
+    return null;
+  }
+
+  // Step 1: before the browser asks Firebase to send the link, confirm the address has a password account.
+  app.post('/api/auth/password-reset/check', async (req, res) => {
+    const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, message: '이메일 주소를 입력해 주세요.' });
+    }
+    if (passwordResetChecks.hit(clientIp(req)) > 20) {
+      return res.status(429).json({ success: false, message: '요청이 너무 많습니다. 15분 뒤에 다시 시도해 주세요.' });
+    }
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
+    }
+    try {
+      const blocker = await passwordResetBlocker(cleanEmail);
+      if (blocker) return res.status(blocker.status).json({ success: false, message: blocker.message });
+    } catch (e) {
+      console.warn('[Auth] Password reset lookup failed:', e);
+      return res.status(503).json({ success: false, message: '서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    return res.json({ success: true });
+  });
+
+  // Step 2: the emailed link was opened; store the new password for the address in the verified token.
+  app.post('/api/auth/password-reset/complete', async (req, res) => {
+    const { idToken, newPassword } = req.body || {};
+    const newPw = newPassword != null ? String(newPassword) : '';
+    if (newPw.length < 8) {
+      return res.status(400).json({ success: false, message: '새 비밀번호는 최소 8자 이상이어야 합니다.' });
+    }
+    if (!isAuthSecretConfigured()) {
+      return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
+    }
+
+    let claims: FirebaseIdTokenClaims;
+    try {
+      claims = await verifyFirebaseIdToken(idToken, firebaseConfigJson.projectId);
+    } catch (err: any) {
+      if (err instanceof InvalidIdTokenError) {
+        console.warn('[Auth] Rejected password reset token:', err.message);
+        return res.status(401).json({ success: false, message: '재설정 링크가 만료되었거나 올바르지 않습니다. 비밀번호 찾기를 다시 요청해 주세요.' });
+      }
+      console.error('[Auth] Password reset token verification failed:', err);
+      return res.status(503).json({ success: false, message: '링크 확인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    const authTime = typeof claims.auth_time === 'number' ? claims.auth_time : 0;
+    if (
+      claims.firebase?.sign_in_provider !== 'password' ||
+      claims.email_verified !== true ||
+      Date.now() / 1000 - authTime > PASSWORD_RESET_LINK_MAX_AGE_SECONDS
+    ) {
+      return res.status(401).json({ success: false, message: '재설정 링크가 만료되었거나 올바르지 않습니다. 비밀번호 찾기를 다시 요청해 주세요.' });
+    }
+
+    const cleanEmail = String(claims.email || '').trim().toLowerCase();
+    try {
+      const blocker = cleanEmail ? await passwordResetBlocker(cleanEmail) : { status: 400, message: '이메일 주소를 확인할 수 없습니다.' };
+      if (blocker) return res.status(blocker.status).json({ success: false, message: blocker.message });
+      await savePassword(cleanEmail, newPw);
+    } catch (e) {
+      console.warn('[Auth] Password reset failed:', e);
+      return res.status(503).json({ success: false, message: '비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    adminLoginFailures.clear(cleanEmail);
+    studentLoginFailures.clear(cleanEmail);
+
+    notifyDiscord({
+      category: 'security',
+      title: '🔑 비밀번호 재설정',
+      description: '📧 이메일 인증 링크로 비밀번호를 새로 설정했어요.',
+      fields: [
+        { name: '👤 계정', value: cleanEmail },
+        { name: '🌐 IP', value: clientIp(req) },
+      ],
+      note: '본인이 아니라면 메일 계정 보안을 바로 확인해 주세요',
+    }).catch(() => {});
+
+    return res.json({ success: true, email: cleanEmail, message: '비밀번호를 새로 설정했습니다.' });
   });
 
   // API User Profile Avatar Upload

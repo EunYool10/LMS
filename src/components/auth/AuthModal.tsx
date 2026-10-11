@@ -4,7 +4,8 @@ import { storage } from '../../services/storage';
 import { isAdminRole } from '../../utils/rbac';
 import { newAgreements, rememberSocialConsent } from '../../services/consent';
 import { ConsentChecklist, ConsentValue } from './ConsentChecklist';
-import { Mail, Lock, User as UserIcon, X, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { requestPasswordReset } from '../../services/passwordReset';
+import { Mail, Lock, User as UserIcon, X, Eye, EyeOff, AlertCircle, ArrowLeft, MailCheck } from 'lucide-react';
 
 interface AuthModalProps {
   onNavigate?: (view: string, param?: string) => void;
@@ -76,6 +77,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
   const [consent, setConsent] = useState<ConsentValue>({ terms: false, privacy: false });
   const [consentError, setConsentError] = useState(false);
   const [formError, setFormError] = useState('');
+  // Forgotten password view (login tab only).
+  const [forgot, setForgot] = useState(false);
+  const [resetSentTo, setResetSentTo] = useState('');
 
   const allowRegistration = storage.getSettings()?.allowRegistration !== false;
   const isRegister = authModalMode === 'register' && allowRegistration;
@@ -88,6 +92,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
       setShowPassword(false);
       setConsentError(false);
       setFormError('');
+      setForgot(false);
+      setResetSentTo('');
     }
   }, [isAuthModalOpen, authModalMode]);
 
@@ -192,6 +198,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
     }
   };
 
+  const openForgot = () => {
+    setForgot(true);
+    setResetSentTo('');
+    setFormError('');
+    setTouched({});
+  };
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!EMAIL_RE.test(trimmed)) {
+      setFormError(trimmed ? '올바른 이메일 주소 형식이 아니에요.' : '가입한 이메일 주소를 입력해 주세요.');
+      return;
+    }
+    setFormError('');
+    setLoading(true);
+    try {
+      await requestPasswordReset(trimmed);
+      setResetSentTo(trimmed.toLowerCase());
+    } catch (err: any) {
+      setFormError(err?.message || '메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const inputClass = (field: keyof typeof errors) =>
     `lms-input h-11 pl-10 ${showError(field) ? 'border-rose-400 focus:border-rose-500 focus:shadow-[0_0_0_3px_rgb(244_63_94/0.12)]' : ''}`;
 
@@ -258,10 +290,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
         <div className="flex items-start justify-between gap-4 px-6 pt-6">
           <div>
             <h2 id="auth-modal-title" className="text-xl font-bold text-neutral-900">
-              {isRegister ? '회원가입' : '로그인'}
+              {forgot ? '비밀번호 찾기' : isRegister ? '회원가입' : '로그인'}
             </h2>
             <p className="mt-1 text-[13px] text-neutral-500">
-              {isRegister ? '사내 학습 계정을 만들고 바로 수강을 시작하세요.' : '등록된 계정으로 로그인해 학습을 이어가세요.'}
+              {forgot
+                ? '가입한 이메일로 비밀번호 재설정 링크를 보내 드려요.'
+                : isRegister
+                  ? '사내 학습 계정을 만들고 바로 수강을 시작하세요.'
+                  : '등록된 계정으로 로그인해 학습을 이어가세요.'}
             </p>
           </div>
           <button
@@ -274,6 +310,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
           </button>
         </div>
 
+        {forgot ? (
+          <div className="overflow-y-auto px-6 pb-6 pt-5">
+            {resetSentTo ? (
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-5 text-center">
+                <MailCheck className="mx-auto h-8 w-8 text-brand-600" />
+                <p className="mt-3 text-sm font-semibold text-neutral-900">메일을 보냈어요</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-neutral-600">
+                  <span className="font-medium text-neutral-900">{resetSentTo}</span>
+                  <br />
+                  받은 메일의 링크를 열면 새 비밀번호를 정할 수 있어요.
+                  <br />
+                  메일이 보이지 않으면 스팸함도 확인해 주세요.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleResetRequest} noValidate className="space-y-4">
+                <div>
+                  <label htmlFor="reset-email" className="mb-1.5 block text-[13px] font-medium text-neutral-800">
+                    가입한 이메일
+                  </label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      id="reset-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setFormError('');
+                      }}
+                      placeholder="name@gmail.com"
+                      autoComplete="email"
+                      autoFocus
+                      className="lms-input h-11 pl-10"
+                    />
+                  </div>
+                </div>
+                {formError && (
+                  <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+                <button type="submit" disabled={loading} className="lms-btn lms-btn-primary h-11 w-full text-[15px]">
+                  {loading ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      보내는 중…
+                    </>
+                  ) : (
+                    '재설정 링크 받기'
+                  )}
+                </button>
+                <p className="text-center text-xs text-neutral-500">카카오·네이버·Google로 가입했다면 해당 SNS로 로그인해 주세요.</p>
+              </form>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setForgot(false);
+                setFormError('');
+              }}
+              className="mt-5 flex w-full items-center justify-center gap-1.5 text-[13px] font-medium text-neutral-600 hover:text-neutral-900 cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              로그인으로 돌아가기
+            </button>
+          </div>
+        ) : (
         <div className="overflow-y-auto px-6 pb-6 pt-5">
           {allowRegistration && (
             <div className="mb-5 grid grid-cols-2 rounded-lg bg-neutral-100 p-1" role="tablist">
@@ -364,7 +469,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                 <label htmlFor="auth-password" className="block text-[13px] font-medium text-neutral-800">
                   비밀번호
                 </label>
-                {isRegister && <span className="text-xs text-neutral-400">8자 이상</span>}
+                {isRegister ? (
+                  <span className="text-xs text-neutral-400">8자 이상</span>
+                ) : (
+                  <button type="button" onClick={openForgot} className="text-xs font-medium text-brand-700 hover:underline cursor-pointer">
+                    비밀번호를 잊으셨나요?
+                  </button>
+                )}
               </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -464,6 +575,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   );

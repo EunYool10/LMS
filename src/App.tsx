@@ -4,6 +4,7 @@ import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { AuthModal } from './components/auth/AuthModal';
+import { PasswordResetModal } from './components/auth/PasswordResetModal';
 import { ConsentGate } from './components/auth/ConsentGate';
 import { PolicyModal } from './components/common/PolicyModal';
 import { MobileNotificationModal } from './components/common/MobileNotificationModal';
@@ -65,6 +66,7 @@ const AppContent: React.FC = () => {
       <>
         <LoginGatePage />
         {isAuthModalOpen && <AuthModal onNavigate={handleNavigate} />}
+        <PasswordResetModal onNavigate={handleNavigate} />
         <PolicyModal />
       </>
     );
@@ -181,6 +183,7 @@ const AppContent: React.FC = () => {
 
       {/* Auth Modal */}
       {isAuthModalOpen && <AuthModal onNavigate={handleNavigate} />}
+      <PasswordResetModal onNavigate={handleNavigate} />
 
       {/* Internal Policy Modal (Terms & Privacy) */}
       <PolicyModal />
