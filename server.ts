@@ -19,7 +19,6 @@ import {
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
-import passwordResetFirebaseConfig from './firebase-password-reset-config.json';
 import { isCloudStorageEnabled, uploadToCloud, deleteFromCloud } from './cloudStorage';
 import {
   DISCORD_MAX_IMAGE_BYTES,
@@ -37,13 +36,18 @@ import {
   hashAccountPassword,
   isAuthSecretConfigured,
   isValidRoleGrant,
+  issuePasswordResetToken,
   issueSessionToken,
+  PASSWORD_RESET_TTL_SECONDS,
+  passwordStamp,
   PasswordRecord,
   roleGrantDocId,
   signRoleGrant,
   verifyAccountPassword,
+  verifyPasswordResetToken,
   verifySessionToken,
 } from './authSecurity';
+import { isMailerConfigured, sendPasswordResetMail } from './resetMailer';
 
 dotenv.config();
 
@@ -668,7 +672,7 @@ async function startServer() {
   // Writes open to signed-out visitors (sign-in itself, and the rate-limited fixed-format alerts).
   const PUBLIC_WRITE_ROUTES: Array<[string, RegExp]> = [
     ['POST', /^\/auth\/(login|register)$/],
-    ['POST', /^\/auth\/password-reset\/(check|complete)$/],
+    ['POST', /^\/auth\/password-reset\/(request|verify|complete)$/],
     ['POST', /^\/auth\/(google\/verify|kakao\/exchange|naver\/exchange)$/],
     ['POST', /^\/notify\/event$/],
   ];
@@ -2115,12 +2119,12 @@ async function startServer() {
     });
   });
 
-  // Forgotten passwords: the browser has Firebase Auth (TDSHQ project, firebase-password-reset-config.json;
-  // app data stays in the applet project) email the address a sign-in link, and opening that
-  // link yields a Firebase ID token whose verified email proves the person owns the address. Only then is
-  // a new password stored. Admin addresses are included: owning the mailbox already opens Google sign-in.
-  const passwordResetChecks = new WindowCounter(15 * 60 * 1000);
-  const PASSWORD_RESET_LINK_MAX_AGE_SECONDS = 30 * 60;
+  // Forgotten passwords: the server mails a signed, 30-minute link from the LMS team's Gmail account
+  // (resetMailer.ts). Opening it proves the person owns the address; only then is a new password stored.
+  // The link carries a stamp of the current password, so it works once. Admin addresses are included:
+  // owning the mailbox already opens Google sign-in.
+  const passwordResetRequests = new WindowCounter(15 * 60 * 1000);
+  const passwordResetMails = new WindowCounter(15 * 60 * 1000);
 
   // Why a password cannot be reset for this address, or null when it can. Throws when Firestore is unreachable.
   async function passwordResetBlocker(cleanEmail: string): Promise<{ status: number; message: string } | null> {
@@ -2146,31 +2150,60 @@ async function startServer() {
     return null;
   }
 
-  // Step 1: before the browser asks Firebase to send the link, confirm the address has a password account.
-  app.post('/api/auth/password-reset/check', async (req, res) => {
+  const currentPasswordStamp = async (email: string) => passwordStamp(await loadPasswordRecord(email));
+  const resetLinkInvalid = { success: false, message: '재설정 링크가 만료되었거나 이미 사용되었습니다. 비밀번호 찾기를 다시 요청해 주세요.' };
+
+  // A link that is signed, unexpired and made for the password still in force; null otherwise.
+  async function usableResetLink(token: unknown): Promise<{ email: string } | null> {
+    const link = verifyPasswordResetToken(token);
+    if (!link) return null;
+    return link.stamp === (await currentPasswordStamp(link.email)) ? { email: link.email } : null;
+  }
+
+  // Step 1: mail a reset link to an address that has a password account.
+  app.post('/api/auth/password-reset/request', async (req, res) => {
     const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
     if (!cleanEmail) {
       return res.status(400).json({ success: false, message: '이메일 주소를 입력해 주세요.' });
     }
-    if (passwordResetChecks.hit(clientIp(req)) > 20) {
+    if (passwordResetRequests.hit(clientIp(req)) > 20) {
       return res.status(429).json({ success: false, message: '요청이 너무 많습니다. 15분 뒤에 다시 시도해 주세요.' });
     }
-    if (!isAuthSecretConfigured()) {
-      return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
+    if (!isAuthSecretConfigured() || !isMailerConfigured()) {
+      return res.status(503).json({ success: false, message: '비밀번호 찾기 메일 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
     }
     try {
       const blocker = await passwordResetBlocker(cleanEmail);
       if (blocker) return res.status(blocker.status).json({ success: false, message: blocker.message });
+      if (passwordResetMails.count(cleanEmail) >= 3) {
+        return res.status(429).json({ success: false, message: '이미 메일을 여러 번 보냈어요. 메일함(스팸함 포함)을 확인하거나 15분 뒤에 다시 시도해 주세요.' });
+      }
+      const token = issuePasswordResetToken(cleanEmail, await currentPasswordStamp(cleanEmail));
+      const baseUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      await sendPasswordResetMail(cleanEmail, `${baseUrl}/?pwreset=${encodeURIComponent(token)}`, PASSWORD_RESET_TTL_SECONDS / 60);
+      passwordResetMails.hit(cleanEmail);
     } catch (e) {
-      console.warn('[Auth] Password reset lookup failed:', e);
-      return res.status(503).json({ success: false, message: '서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+      console.warn('[Auth] Password reset mail failed:', e);
+      return res.status(503).json({ success: false, message: '메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.' });
     }
     return res.json({ success: true });
   });
 
-  // Step 2: the emailed link was opened; store the new password for the address in the verified token.
+  // Step 2: the emailed link was opened; tell the page which account it is for.
+  app.post('/api/auth/password-reset/verify', async (req, res) => {
+    try {
+      const link = await usableResetLink(req.body?.token);
+      if (!link) return res.status(401).json(resetLinkInvalid);
+      return res.json({ success: true, email: link.email });
+    } catch (e) {
+      console.warn('[Auth] Password reset link check failed:', e);
+      return res.status(503).json({ success: false, message: '링크 확인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+  });
+
+  // Step 3: store the new password for the account the link was made for.
   app.post('/api/auth/password-reset/complete', async (req, res) => {
-    const { idToken, newPassword } = req.body || {};
+    const { token, newPassword } = req.body || {};
     const newPw = newPassword != null ? String(newPassword) : '';
     if (newPw.length < 8) {
       return res.status(400).json({ success: false, message: '새 비밀번호는 최소 8자 이상이어야 합니다.' });
@@ -2179,29 +2212,12 @@ async function startServer() {
       return res.status(503).json({ success: false, message: '비밀번호 저장 설정이 완료되지 않았습니다. 관리자에게 문의해 주세요.' });
     }
 
-    let claims: FirebaseIdTokenClaims;
+    let cleanEmail = '';
     try {
-      claims = await verifyFirebaseIdToken(idToken, passwordResetFirebaseConfig.projectId);
-    } catch (err: any) {
-      if (err instanceof InvalidIdTokenError) {
-        console.warn('[Auth] Rejected password reset token:', err.message);
-        return res.status(401).json({ success: false, message: '재설정 링크가 만료되었거나 올바르지 않습니다. 비밀번호 찾기를 다시 요청해 주세요.' });
-      }
-      console.error('[Auth] Password reset token verification failed:', err);
-      return res.status(503).json({ success: false, message: '링크 확인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.' });
-    }
-    const authTime = typeof claims.auth_time === 'number' ? claims.auth_time : 0;
-    if (
-      claims.firebase?.sign_in_provider !== 'password' ||
-      claims.email_verified !== true ||
-      Date.now() / 1000 - authTime > PASSWORD_RESET_LINK_MAX_AGE_SECONDS
-    ) {
-      return res.status(401).json({ success: false, message: '재설정 링크가 만료되었거나 올바르지 않습니다. 비밀번호 찾기를 다시 요청해 주세요.' });
-    }
-
-    const cleanEmail = String(claims.email || '').trim().toLowerCase();
-    try {
-      const blocker = cleanEmail ? await passwordResetBlocker(cleanEmail) : { status: 400, message: '이메일 주소를 확인할 수 없습니다.' };
+      const link = await usableResetLink(token);
+      if (!link) return res.status(401).json(resetLinkInvalid);
+      cleanEmail = link.email;
+      const blocker = await passwordResetBlocker(cleanEmail);
       if (blocker) return res.status(blocker.status).json({ success: false, message: blocker.message });
       await savePassword(cleanEmail, newPw);
     } catch (e) {
@@ -2214,7 +2230,7 @@ async function startServer() {
     notifyDiscord({
       category: 'security',
       title: '🔑 비밀번호 재설정',
-      description: '📧 이메일 인증 링크로 비밀번호를 새로 설정했어요.',
+      description: '📧 메일로 받은 링크로 비밀번호를 새로 설정했어요.',
       fields: [
         { name: '👤 계정', value: cleanEmail },
         { name: '🌐 IP', value: clientIp(req) },

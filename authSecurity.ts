@@ -124,6 +124,41 @@ export const credentialDocId = (email: string) =>
   `cred_${crypto.createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 40)}`;
 
 // ---------------------------------------------------------------------------------------------
+// Password reset links: pr1.<payload>.<signature>, mailed to the address. The payload carries a stamp of
+// the password in force when the link was made, so the link stops working once any new password is set.
+// ---------------------------------------------------------------------------------------------
+
+const RESET_PREFIX = 'pr1';
+export const PASSWORD_RESET_TTL_SECONDS = 30 * 60;
+
+/** Short fingerprint of the current password record ('initial' when none is stored). */
+export const passwordStamp = (record: Partial<PasswordRecord> | null | undefined) =>
+  record?.hash ? crypto.createHash('sha256').update(record.hash).digest('base64url').slice(0, 16) : 'initial';
+
+export function issuePasswordResetToken(email: string, stamp: string): string {
+  const payload = Buffer.from(
+    JSON.stringify({ email: email.toLowerCase(), stamp, exp: Math.floor(Date.now() / 1000) + PASSWORD_RESET_TTL_SECONDS })
+  ).toString('base64url');
+  return `${RESET_PREFIX}.${payload}.${hmac('password-reset', payload)}`;
+}
+
+/** The email and password stamp of a valid, unexpired reset link; null otherwise. */
+export function verifyPasswordResetToken(token: unknown): { email: string; stamp: string } | null {
+  if (typeof token !== 'string' || !configuredSecret()) return null;
+  const [prefix, payload, signature, ...rest] = token.split('.');
+  if (prefix !== RESET_PREFIX || !payload || !signature || rest.length) return null;
+  if (!safeEqual(signature, hmac('password-reset', payload))) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (typeof claims.email !== 'string' || typeof claims.stamp !== 'string' || typeof claims.exp !== 'number') return null;
+    if (claims.exp < Math.floor(Date.now() / 1000)) return null;
+    return { email: claims.email, stamp: claims.stamp };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Role grants: an admin-assigned role is only honoured when signed by this server.
 // ---------------------------------------------------------------------------------------------
 

@@ -3,52 +3,44 @@ import { useAuth } from '../../context/AuthContext';
 import {
   clearPasswordResetLink,
   completePasswordReset,
-  confirmPasswordResetLink,
-  isPasswordResetLink,
-  rememberedResetEmail,
-  ResetEmailMismatchError,
+  passwordResetToken,
+  verifyPasswordResetLink,
 } from '../../services/passwordReset';
 import { isAdminRole } from '../../utils/rbac';
-import { AlertCircle, Eye, EyeOff, Lock, Mail, X } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Lock, X } from 'lucide-react';
 
 interface PasswordResetModalProps {
   onNavigate?: (view: string, param?: string) => void;
 }
 
-type Step = 'email' | 'verifying' | 'password' | 'failed';
+type Step = 'verifying' | 'password' | 'failed';
 
-// Opened from the password reset email: confirms the link, then lets the person choose a new password
+// Opened from the password reset email: checks the link, then lets the person choose a new password
 // and signs them in with it.
 export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({ onNavigate }) => {
   const { login, openAuthModal } = useAuth();
-  const [open, setOpen] = useState(() => isPasswordResetLink());
-  const [step, setStep] = useState<Step>(() => (rememberedResetEmail() ? 'verifying' : 'email'));
-  const [email, setEmail] = useState(() => rememberedResetEmail());
-  const [idToken, setIdToken] = useState('');
+  const [token] = useState(() => passwordResetToken());
+  const [open, setOpen] = useState(() => !!token);
+  const [step, setStep] = useState<Step>('verifying');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const verify = async (address: string) => {
-    setStep('verifying');
-    setError('');
-    try {
-      setIdToken(await confirmPasswordResetLink(address));
-      setStep('password');
-    } catch (err: any) {
-      setError(err?.message || '링크를 확인하지 못했습니다.');
-      // A mistyped address can be corrected; any other failure means the link itself is unusable.
-      setStep(err instanceof ResetEmailMismatchError ? 'email' : 'failed');
-    }
-  };
-
-  // The address was remembered when the link was requested in this browser: check the link right away.
   useEffect(() => {
-    if (open && step === 'verifying' && email) verify(email);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!token) return;
+    verifyPasswordResetLink(token)
+      .then((address) => {
+        setEmail(address);
+        setStep('password');
+      })
+      .catch((err) => {
+        setError(err?.message || '링크를 확인하지 못했습니다.');
+        setStep('failed');
+      });
+  }, [token]);
 
   if (!open) return null;
 
@@ -60,15 +52,6 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({ onNaviga
   const requestAgain = () => {
     close();
     openAuthModal('login');
-  };
-
-  const handleEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      setError('비밀번호 찾기를 요청한 이메일 주소를 입력해 주세요.');
-      return;
-    }
-    verify(email);
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -84,7 +67,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({ onNaviga
     setError('');
     setLoading(true);
     try {
-      const accountEmail = await completePasswordReset(idToken, password);
+      const accountEmail = await completePasswordReset(token, password);
       close();
       const user = await login(accountEmail, password).catch(() => null);
       if (user) onNavigate?.(isAdminRole(user.role as any) ? 'admin-dashboard' : 'dashboard');
@@ -121,7 +104,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({ onNaviga
             <p className="mt-1 text-[13px] text-neutral-500">
               {step === 'password' ? (
                 <>
-                  <span className="font-medium text-neutral-800">{email.trim().toLowerCase()}</span> 계정의 새 비밀번호를 정해 주세요.
+                  <span className="font-medium text-neutral-800">{email}</span> 계정의 새 비밀번호를 정해 주세요.
                 </>
               ) : (
                 '메일로 받은 링크를 확인하고 있어요.'
@@ -144,32 +127,6 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({ onNaviga
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
               링크 확인 중…
             </div>
-          )}
-
-          {step === 'email' && (
-            <form onSubmit={handleEmailSubmit} noValidate className="space-y-4">
-              <p className="text-[13px] text-neutral-600">다른 기기나 브라우저에서 링크를 열었다면, 비밀번호 찾기를 요청한 이메일을 한 번 더 입력해 주세요.</p>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="name@gmail.com"
-                  autoComplete="email"
-                  autoFocus
-                  aria-label="이메일"
-                  className="lms-input h-11 pl-10"
-                />
-              </div>
-              <ErrorBox />
-              <button type="submit" className="lms-btn lms-btn-primary h-11 w-full text-[15px]">
-                확인
-              </button>
-            </form>
           )}
 
           {step === 'failed' && (
