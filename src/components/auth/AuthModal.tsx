@@ -43,6 +43,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [consent, setConsent] = useState<ConsentValue>({ terms: false, privacy: false });
   const [consentError, setConsentError] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const allowRegistration = storage.getSettings()?.allowRegistration !== false;
   const isRegister = authModalMode === 'register' && allowRegistration;
@@ -54,6 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
       setTouched({});
       setShowPassword(false);
       setConsentError(false);
+      setFormError('');
     }
   }, [isAuthModalOpen, authModalMode]);
 
@@ -127,19 +129,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
       return;
     }
 
+    // A failed attempt empties the password field; it is marked untouched again so the empty field
+    // is not reported as "비밀번호를 입력해 주세요", which hid the real reason the sign-in failed.
+    const clearPassword = () => {
+      setPassword('');
+      setTouched((t) => ({ ...t, password: false }));
+    };
+
+    setFormError('');
     setLoading(true);
     try {
       if (isRegister) {
         const ok = await register(name, email, password, newAgreements());
         if (ok) onNavigate?.('dashboard');
-        else setPassword('');
+        else clearPassword();
       } else {
         const loggedInUser = await login(email, password);
         if (loggedInUser) goAfterLogin(loggedInUser.role);
-        else setPassword('');
+        else {
+          clearPassword();
+          setFormError('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
       }
-    } catch {
-      setPassword('');
+    } catch (err: any) {
+      clearPassword();
+      setFormError(err?.message || '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setLoading(false);
     }
@@ -283,7 +297,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                   id="auth-email"
                   type={isRegister ? 'email' : 'text'}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFormError('');
+                  }}
                   onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                   placeholder={isRegister ? 'name@gmail.com' : '이메일 또는 관리자 아이디'}
                   autoComplete={isRegister ? 'email' : 'username'}
@@ -306,7 +323,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                   id="auth-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setFormError('');
+                  }}
                   onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                   placeholder="비밀번호"
                   autoComplete={isRegister ? 'new-password' : 'current-password'}
@@ -334,6 +354,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                 }}
                 invalid={consentError}
               />
+            )}
+
+            {formError && !isRegister && (
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
             )}
 
             <button type="submit" disabled={loading} className="lms-btn lms-btn-primary h-11 w-full text-[15px]">

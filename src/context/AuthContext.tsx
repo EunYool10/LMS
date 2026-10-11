@@ -357,25 +357,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [closeAuthModal, showToast]);
 
+  // Throws on failure so the sign-in form can show the reason next to the fields.
   const login = async (email: string, password = ''): Promise<User | null> => {
-    try {
-      const res = await authApi.login(email, password);
-      if (res.success && res.user) {
-        storage.setCurrentUser(res.user);
-        setUser(res.user);
-        closeAuthModal();
-        showToast(
-          `${res.user.name}님 환영합니다.${res.user.role === 'SUPER_ADMIN' ? ' (총관리자 로그인)' : res.user.role === 'ADMIN' ? ' (강의 관리자 로그인)' : ''}`,
-          'success',
-          '로그인 완료'
-        );
-        return res.user;
-      }
-      return null;
-    } catch (err: any) {
-      showToast(err.message || '로그인에 실패했습니다.', 'error', '로그인 실패');
-      return null;
+    const res = await authApi.login(email, password);
+    if (res.success && res.user) {
+      storage.setCurrentUser(res.user);
+      setUser(res.user);
+      closeAuthModal();
+      showToast(
+        `${res.user.name}님 환영합니다.${res.user.role === 'SUPER_ADMIN' ? ' (총관리자 로그인)' : res.user.role === 'ADMIN' ? ' (강의 관리자 로그인)' : ''}`,
+        'success',
+        '로그인 완료'
+      );
+      return res.user;
     }
+    return null;
   };
 
   const register = async (
