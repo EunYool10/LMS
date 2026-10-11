@@ -19,6 +19,7 @@ import {
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
+import passwordResetFirebaseConfig from './firebase-password-reset-config.json';
 import { isCloudStorageEnabled, uploadToCloud, deleteFromCloud } from './cloudStorage';
 import {
   DISCORD_MAX_IMAGE_BYTES,
@@ -2114,7 +2115,8 @@ async function startServer() {
     });
   });
 
-  // Forgotten passwords: the browser has Firebase Auth email the address a sign-in link, and opening that
+  // Forgotten passwords: the browser has Firebase Auth (TDSHQ project, firebase-password-reset-config.json;
+  // app data stays in the applet project) email the address a sign-in link, and opening that
   // link yields a Firebase ID token whose verified email proves the person owns the address. Only then is
   // a new password stored. Admin addresses are included: owning the mailbox already opens Google sign-in.
   const passwordResetChecks = new WindowCounter(15 * 60 * 1000);
@@ -2179,7 +2181,7 @@ async function startServer() {
 
     let claims: FirebaseIdTokenClaims;
     try {
-      claims = await verifyFirebaseIdToken(idToken, firebaseConfigJson.projectId);
+      claims = await verifyFirebaseIdToken(idToken, passwordResetFirebaseConfig.projectId);
     } catch (err: any) {
       if (err instanceof InvalidIdTokenError) {
         console.warn('[Auth] Rejected password reset token:', err.message);

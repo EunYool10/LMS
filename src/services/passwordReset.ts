@@ -1,8 +1,12 @@
-import { isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getAuth, isSignInWithEmailLink, sendSignInLinkToEmail, signInWithEmailLink, signOut } from 'firebase/auth';
+import resetConfig from '../../firebase-password-reset-config.json';
 
 // Forgotten passwords. Firebase Auth emails the address a one-time sign-in link; opening it gives a
 // Firebase ID token with a verified email, which the server accepts as proof before storing a new password.
+// This uses the team's own Firebase project (TDSHQ); app data and Google sign-in stay on the applet project.
+const RESET_APP_NAME = 'password-reset';
+const auth = getAuth(getApps().some((a) => a.name === RESET_APP_NAME) ? getApp(RESET_APP_NAME) : initializeApp(resetConfig, RESET_APP_NAME));
 
 const EMAIL_KEY = 'lms_password_reset_email';
 const LINK_PARAM = 'pwreset';
