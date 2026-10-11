@@ -310,6 +310,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const res = await signInWithGoogleAuth();
       if (res && res.user) {
         const verified = await authApi.verifyGoogleUser({
+          idToken: await res.user.getIdToken(),
           uid: res.user.uid,
           email: res.user.email,
           displayName: res.user.displayName,

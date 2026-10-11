@@ -603,14 +603,25 @@ export const authApi = {
   /**
    * Verify and register user from Google Auth
    */
-  async verifyGoogleUser(googleUser: { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }): Promise<LoginResponse> {
+  async verifyGoogleUser(googleUser: {
+    idToken: string;
+    uid: string;
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+  }): Promise<LoginResponse> {
+    // The server reads the account only from the verified ID token; the other fields feed the offline fallback.
     const res = await fetch('/api/auth/google/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(googleUser),
+      body: JSON.stringify({ idToken: googleUser.idToken }),
     });
 
     const data = await res.json().catch(() => ({}));
+    // A deliberate rejection (e.g. an invalid token) is final; only an unavailable server falls back.
+    if (res.status >= 400 && res.status < 500) {
+      throw new Error(data.message || 'Google 로그인 인증에 실패했습니다.');
+    }
     if (!res.ok || !data.success) {
       // Local fallback in case server offline
       const cleanEmail = (googleUser.email || '').toLowerCase().trim();

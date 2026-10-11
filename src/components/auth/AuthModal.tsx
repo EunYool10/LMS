@@ -19,6 +19,38 @@ const isAllowedRegisterDomain = (val: string) => {
   return REGISTER_DOMAINS.some((d) => lower.endsWith(d));
 };
 
+const editDistance = (a: string, b: string) => {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+};
+
+// The address the user most likely meant when the domain is one or two keystrokes away from a
+// supported one (e.g. gmaol.com → gmail.com); empty when nothing is close.
+const suggestEmail = (val: string) => {
+  const trimmed = val.trim();
+  const at = trimmed.lastIndexOf('@');
+  if (at < 1) return '';
+  const domain = trimmed.slice(at + 1).toLowerCase();
+  if (!domain.includes('.') || REGISTER_DOMAINS.includes(`@${domain}`)) return '';
+  let best = '';
+  let bestDistance = 3;
+  for (const d of REGISTER_DOMAINS) {
+    const distance = editDistance(domain, d.slice(1));
+    if (distance < bestDistance) {
+      best = d.slice(1);
+      bestDistance = distance;
+    }
+  }
+  return best ? `${trimmed.slice(0, at)}@${best}` : '';
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
   const {
     isAuthModalOpen,
@@ -104,6 +136,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
     password: validatePassword(password),
   };
   const showError = (field: keyof typeof errors) => touched[field] && errors[field];
+  const emailSuggestion = touched.email ? suggestEmail(email) : '';
 
   const handleSocial = async (provider: 'kakao' | 'naver' | 'google') => {
     if (isRegister) {
@@ -308,6 +341,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onNavigate }) => {
                 />
               </div>
               <FieldError field="email" />
+              {emailSuggestion && (
+                <p className="mt-1.5 text-xs text-neutral-600">
+                  혹시{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(emailSuggestion);
+                      setFormError('');
+                    }}
+                    className="font-medium text-brand-700 underline underline-offset-2 cursor-pointer"
+                  >
+                    {emailSuggestion}
+                  </button>
+                  을(를) 입력하려고 하셨나요?
+                </p>
+              )}
             </div>
 
             <div>

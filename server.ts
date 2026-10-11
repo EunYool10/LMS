@@ -14,6 +14,8 @@ import {
   deleteDoc,
   collection,
   getDocs,
+  query,
+  where,
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfigJson from './firebase-applet-config.json';
@@ -28,6 +30,7 @@ import {
   sendDiscord,
   WindowCounter,
 } from './discordNotifier';
+import { FirebaseIdTokenClaims, InvalidIdTokenError, verifyFirebaseIdToken } from './firebaseIdToken';
 
 dotenv.config();
 
@@ -972,7 +975,9 @@ async function startServer() {
       }
     }
 
-    const isProtectedAdmin = ALLOWED_ADMIN_EMAILS.includes(email.toLowerCase());
+    // Only an address Kakao has verified may unlock an admin account.
+    const isProtectedAdmin =
+      userData.kakao_account?.is_email_verified === true && ALLOWED_ADMIN_EMAILS.includes(email.toLowerCase());
     const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : (existingUser?.role || 'USER');
 
     const resolvedUser = {
@@ -1613,16 +1618,35 @@ async function startServer() {
     });
   });
 
-  // Google Auth Verify & Session Issuer (Supports Firebase Auth Client Result)
+  // Google Auth Verify & Session Issuer. The browser sends the Firebase ID token from its Google
+  // sign-in; uid, email and profile are read from the verified token only, because a client-supplied
+  // email would let anyone claim an admin address.
   app.post('/api/auth/google/verify', async (req, res) => {
-    const { uid, email, displayName, photoURL } = req.body || {};
-    if (!uid && !email) {
-      return res.status(400).json({ success: false, message: 'Google 사용자 정보가 누락되었습니다.' });
+    const { idToken } = req.body || {};
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'Google 로그인 정보를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.' });
     }
 
-    const cleanEmail = (email || '').toLowerCase().trim();
-    const googleId = String(uid || Buffer.from(cleanEmail).toString('hex').slice(0, 10));
+    let claims: FirebaseIdTokenClaims;
+    try {
+      claims = await verifyFirebaseIdToken(idToken, firebaseConfigJson.projectId);
+    } catch (err: any) {
+      if (err instanceof InvalidIdTokenError) {
+        console.warn('[GoogleAuth] Rejected ID token:', err.message);
+        return res.status(401).json({ success: false, message: 'Google 로그인 인증이 만료되었거나 올바르지 않습니다. 다시 시도해 주세요.' });
+      }
+      console.error('[GoogleAuth] ID token verification failed:', err);
+      return res.status(503).json({ success: false, message: 'Google 로그인 확인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    if (claims.firebase?.sign_in_provider !== 'google.com') {
+      return res.status(401).json({ success: false, message: 'Google 계정으로 로그인한 경우에만 사용할 수 있습니다.' });
+    }
+
+    const cleanEmail = (claims.email || '').toLowerCase().trim();
+    const googleId = claims.sub;
     const userId = `google_${googleId}`;
+    const displayName = claims.name;
+    const photoURL = claims.picture;
     const name = displayName || cleanEmail.split('@')[0] || '구글 수강생';
 
     let existingUser = userProfilesStore[userId] || (cleanEmail ? userProfilesStore[cleanEmail] : null);
@@ -1638,7 +1662,7 @@ async function startServer() {
       }
     }
 
-    const isProtectedAdmin = ALLOWED_ADMIN_EMAILS.includes(cleanEmail);
+    const isProtectedAdmin = claims.email_verified === true && ALLOWED_ADMIN_EMAILS.includes(cleanEmail);
     const finalRole = isProtectedAdmin ? 'SUPER_ADMIN' : (existingUser?.role || 'USER');
 
     const resolvedUser = {
@@ -1675,6 +1699,21 @@ async function startServer() {
       createdAt: Date.now(),
     });
 
+    // Admin sign-ins through Google are posted like password sign-ins, so a login by someone else is noticed.
+    if (isProtectedAdmin) {
+      notifyDiscord({
+        category: 'security',
+        title: '🔐 관리자 로그인',
+        description: `👋 **${resolvedUser.name}** 관리자 계정으로 Google 로그인했어요.`,
+        fields: [
+          { name: '👤 계정', value: cleanEmail },
+          { name: '🌐 IP', value: clientIp(req) },
+        ],
+        note: '본인이 아니라면 Google 계정 보안을 바로 확인해 주세요',
+        dedupeKey: `admin-login:${cleanEmail}:${clientIp(req)}:${Math.floor(Date.now() / (6 * 3_600_000))}`,
+      }).catch(() => {});
+    }
+
     return res.json({
       success: true,
       user: resolvedUser,
@@ -1683,8 +1722,22 @@ async function startServer() {
     });
   });
 
+  const SNS_PROVIDER_NAMES: Record<string, string> = { kakao: '카카오', naver: '네이버', google: 'Google' };
+
+  // Users-collection accounts with this email, oldest first. Throws when Firestore cannot be reached.
+  async function findAccountsByEmail(cleanEmail: string): Promise<any[]> {
+    const lookup = getDocs(query(collection(fbDb, 'users'), where('email', '==', cleanEmail)));
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore account lookup timed out')), 8000)
+    );
+    const snap = await Promise.race([lookup, timeout]);
+    return snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .sort((a: any, b: any) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  }
+
   // API Auth Login Endpoint
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body || {};
     let cleanEmail = (email || '').trim().toLowerCase();
     if (cleanEmail === 'tdsntlms' || cleanEmail === 'admin_teamdevstudiont') {
@@ -1787,11 +1840,34 @@ async function startServer() {
       });
     }
 
-    // Student (General User) Account Login
-    const userId = `usr_${Buffer.from(cleanEmail).toString('hex').slice(0, 10)}`;
+    // Student (General User) Account Login. The account must already exist in the users collection
+    // (written at sign-up): its stored id is reused on every sign-in, and a mistyped address is rejected
+    // instead of silently opening a new, empty account. Student passwords are not stored yet, so they
+    // are not checked here.
+    let accounts: any[];
+    try {
+      accounts = await findAccountsByEmail(cleanEmail);
+    } catch (e) {
+      console.warn('[Auth] Account lookup failed:', e);
+      return res.status(503).json({ success: false, message: '로그인 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+    const account = accounts.find((a) => !SNS_PROVIDER_NAMES[a.provider]);
+    if (!account) {
+      const snsAccount = accounts.find((a) => SNS_PROVIDER_NAMES[a.provider]);
+      if (snsAccount) {
+        const providerName = SNS_PROVIDER_NAMES[snsAccount.provider];
+        return res.status(403).json({ success: false, message: `${providerName} 계정으로 가입한 이메일입니다. 아래 ${providerName} 로그인 버튼을 이용해 주세요.` });
+      }
+      return res.status(401).json({ success: false, message: '가입되지 않은 이메일입니다. 주소를 다시 확인하거나 회원가입해 주세요.' });
+    }
+    if (String(account.status || '').toLowerCase() === 'suspended') {
+      return res.status(403).json({ success: false, message: '이용이 정지된 계정입니다. 관리자에게 문의해 주세요.' });
+    }
+
+    const userId: string = account.id;
     const customProfile = userProfilesStore[cleanEmail] || userProfilesStore[userId] || {};
     const userToken = `tdsnt_jwt_usr_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-    const studentName = customProfile.name || cleanEmail.split('@')[0];
+    const studentName = customProfile.name || account.name || cleanEmail.split('@')[0];
     const studentRole = customProfile.role || 'USER';
 
     activeSessions.set(userToken, {
@@ -1809,9 +1885,9 @@ async function startServer() {
         name: studentName,
         email: cleanEmail,
         role: studentRole,
-        status: customProfile.status || 'active',
-        avatar: customProfile.avatar,
-        createdAt: new Date().toISOString(),
+        status: customProfile.status || account.status || 'active',
+        avatar: customProfile.avatar !== undefined ? customProfile.avatar : account.avatar,
+        createdAt: account.createdAt || new Date().toISOString(),
       },
       token: userToken,
       message: '수강생 로그인이 완료되었습니다.',
@@ -2348,7 +2424,7 @@ async function startServer() {
   app.post('/api/admin/users/:userId/role', handleAdminRoleUpdate);
 
   // API Auth Register Endpoint
-  app.post('/api/auth/register', (req, res) => {
+  app.post('/api/auth/register', async (req, res) => {
     const { name, email, password, agreements } = req.body || {};
     const cleanName = (name || '').trim();
     const cleanEmail = (email || '').trim().toLowerCase();
@@ -2392,6 +2468,23 @@ async function startServer() {
       return res.status(400).json({ success: false, message: '운영 규정과 개인정보 수집·이용에 동의해야 가입할 수 있습니다.' });
     }
 
+    // One account per email: sign-in looks the account up by email.
+    try {
+      const existing = (await findAccountsByEmail(cleanEmail))[0];
+      if (existing) {
+        const providerName = SNS_PROVIDER_NAMES[existing.provider];
+        return res.status(409).json({
+          success: false,
+          message: providerName
+            ? `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해 주세요.`
+            : '이미 가입된 이메일입니다. 로그인해 주세요.',
+        });
+      }
+    } catch (e) {
+      console.warn('[Auth] Account lookup failed:', e);
+      return res.status(503).json({ success: false, message: '회원가입 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+    }
+
     // Strictly enforce USER (student) role for registrations (no dummy avatar)
     const now = new Date().toISOString();
     const newUser = {
@@ -2403,6 +2496,14 @@ async function startServer() {
       createdAt: now,
       agreements: { terms: now, privacy: now },
     };
+
+    // Stored here (not only by the browser) so the account can sign in even if the client's own save fails.
+    try {
+      await setDoc(doc(fbDb, 'users', newUser.id), newUser, { merge: true });
+    } catch (e) {
+      console.warn('[Auth] Saving new account failed:', e);
+      return res.status(503).json({ success: false, message: '회원가입 서버가 잠시 응답하지 않습니다. 잠시 후 다시 시도해 주세요.' });
+    }
 
     const token = `tdsnt_jwt_usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     return res.json({ success: true, user: newUser, token });
