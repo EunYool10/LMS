@@ -758,8 +758,22 @@ async function startServer() {
     return discordToggles.value[category] !== false;
   };
 
-  const notifyDiscord = async (message: DiscordMessage & { category: DiscordCategory }) =>
-    (await isDiscordCategoryOn(message.category)) ? sendDiscord(message) : false;
+  // Name, address and profile photo for an alert's actor; a failed lookup only leaves them out.
+  const lookupActor = async (userId: string): Promise<DiscordMessage['actor']> => {
+    try {
+      const u: any = userProfilesStore[userId] || (await withTimeout(getDoc(doc(fbDb, 'users', userId)), 'Actor lookup', 4000)).data();
+      if (!u) return undefined;
+      return { name: u.name || u.email || userId, email: u.email || undefined, avatar: typeof u.avatar === 'string' ? u.avatar : undefined };
+    } catch {
+      return undefined;
+    }
+  };
+
+  const notifyDiscord = async (message: DiscordMessage & { category: DiscordCategory; actorId?: string }) => {
+    if (!(await isDiscordCategoryOn(message.category))) return false;
+    const { actorId, ...rest } = message;
+    return sendDiscord(actorId && !rest.actor ? { ...rest, actor: await lookupActor(actorId) } : rest);
+  };
 
   /** Display name for alerts raised by the server, which only knows the user id. */
   const lookupLabels = async (userId?: string, courseId?: string) => {
@@ -973,7 +987,7 @@ async function startServer() {
     }
 
     if (!isDiscordConfigured()) return res.json({ sent: false, reason: 'not_configured' });
-    const sent = await notifyDiscord(message);
+    const sent = await notifyDiscord({ ...message, actorId: session?.id });
     return res.json({ sent });
   });
 
@@ -1849,6 +1863,7 @@ async function startServer() {
     // Admin sign-ins through Google are posted like password sign-ins, so a login by someone else is noticed.
     if (isProtectedAdmin) {
       notifyDiscord({
+        actorId: userId,
         category: 'security',
         title: '🔐 관리자 로그인',
         description: `👋 **${resolvedUser.name}** 관리자 계정으로 Google 로그인했어요.`,
@@ -1967,6 +1982,7 @@ async function startServer() {
 
       // Every admin sign-in is posted so a login by someone else is noticed quickly.
       notifyDiscord({
+        actorId: adminAcc.id,
         category: 'security',
         title: '🔐 관리자 로그인',
         description: `👋 **${finalName}** 관리자 계정으로 로그인했어요.`,
@@ -2763,6 +2779,7 @@ async function startServer() {
         timestamp: new Date().toISOString(),
       });
       notifyDiscord({
+        actorId: authUser.id,
         category: 'security',
         title: '🔑 비밀번호 초기화',
         description: `**${authUser.name || authUser.email}** 님이 수강생 비밀번호를 초기화했어요.`,
@@ -3763,6 +3780,7 @@ async function startServer() {
         lookupLabels(userId, courseId)
           .then(({ userLabel, courseLabel }) =>
             notifyDiscord({
+              actorId: userId,
               category: 'security',
               title: '🕵️ 진도 조작 의심',
               description: '⚠️ 정상 플레이어가 보내지 않는 시청 기록이 반복해서 들어왔어요.',

@@ -22,6 +22,8 @@ export interface DiscordMessage {
   note?: string;
   /** Photos shown in the message (Discord renders up to 4 as a gallery). */
   images?: DiscordImage[];
+  /** The person the alert is about, shown at the top with their profile photo. */
+  actor?: { name: string; email?: string; avatar?: string };
   /** Messages with the same key are sent once per DEDUPE_MS. */
   dedupeKey?: string;
 }
@@ -55,13 +57,36 @@ const clip = (s: unknown, max: number, multiline = false) => {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 };
 
+// Uploaded profile photos are stored as data URLs, which Discord cannot load, so they go as an attachment.
+function avatarAttachment(avatar: string): DiscordImage | null {
+  const m = /^data:image\/(png|jpe?g|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(avatar);
+  if (!m) return null;
+  const data = Buffer.from(m[2], 'base64');
+  if (!data.length || data.length > DISCORD_MAX_IMAGE_BYTES) return null;
+  return { filename: `avatar.${m[1] === 'jpeg' ? 'jpg' : m[1]}`, data, contentType: `image/${m[1]}` };
+}
+
 function buildPayload(message: DiscordMessage) {
   const meta = CATEGORY_META[message.category];
   const site = appUrl();
   const images = (message.images || []).slice(0, DISCORD_MAX_IMAGES);
 
+  const actor = message.actor;
+  const rawAvatar = String(actor?.avatar || '').trim();
+  const avatarFile = avatarAttachment(rawAvatar);
+  const avatarUrl = /^https:\/\//.test(rawAvatar)
+    ? rawAvatar
+    : rawAvatar.startsWith('/') && site
+      ? `${site}${rawAvatar}`
+      : avatarFile
+        ? `attachment://${avatarFile.filename}`
+        : undefined;
+  const actorLine = actor ? `${actor.name}${actor.email && actor.email !== actor.name ? ` · ${actor.email}` : ''}` : '';
+
   const main: Record<string, unknown> = {
-    author: { name: meta.author },
+    // With a person attached, the top line is who it is about and the category moves to the footer.
+    author: actor ? { name: clip(actorLine, 240), icon_url: avatarUrl } : { name: meta.author },
+    thumbnail: avatarUrl ? { url: avatarUrl } : undefined,
     title: clip(message.title, 240),
     description: message.description ? clip(message.description, 1500, true) : undefined,
     color: meta.color,
@@ -72,7 +97,7 @@ function buildPayload(message: DiscordMessage) {
       .map((f) => ({ name: clip(f.name, 100), value: clip(f.value, 900, true) || '-', inline: f.inline ?? true })),
     image: images[0] ? { url: `attachment://${images[0].filename}` } : undefined,
     footer: {
-      text: `🏫 TDSNT LMS${message.note ? ` · ${clip(message.note, 120)}` : ''}`,
+      text: `🏫 TDSNT LMS${actor ? ` · ${meta.author}` : ''}${message.note ? ` · ${clip(message.note, 120)}` : ''}`,
       icon_url: site ? `${site}/favicon-32x32.png` : undefined,
     },
     timestamp: new Date().toISOString(),
@@ -88,7 +113,7 @@ function buildPayload(message: DiscordMessage) {
       allowed_mentions: { parse: [] as string[] }, // user-written text can never ping @everyone or roles
       embeds: [main, ...gallery],
     },
-    images,
+    images: avatarFile && avatarUrl === `attachment://${avatarFile.filename}` ? [...images, avatarFile] : images,
   };
 }
 
