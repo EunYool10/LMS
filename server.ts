@@ -2215,7 +2215,7 @@ async function startServer() {
   const mailTests = new WindowCounter(15 * 60 * 1000);
   app.post('/api/admin/mail/test', async (req, res) => {
     const to = String(req.body?.to || '').trim().toLowerCase();
-    if (!/^[^s@,;<>]+@[^s@,;<>]+.[^s@,;<>]+$/.test(to)) {
+    if (!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(to)) {
       return res.status(400).json({ success: false, message: '받는 메일 주소를 확인해 주세요.' });
     }
     if (!isMailerConfigured()) {
