@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, UserStatus, AuditLog, AdminRoleTag } from '../../types';
 import { storage, TDSNTLMSStorage } from '../../services/storage';
+import { shrinkAvatar } from '../../utils/avatarImage';
 import { authApi } from '../../services/authApi';
 import { firestoreService } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -348,29 +349,8 @@ export const UserManager: React.FC = () => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-
-      const res = await fetch('/api/me/avatar', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
       const actor = currentUser ? { id: currentUser.id, name: currentUser.name } : undefined;
-
-      if (data.success && data.avatarUrl) {
-        storage.updateUserAvatar(selectedUser.id, data.avatarUrl, actor);
-      } else {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const base64 = event.target?.result as string;
-          storage.updateUserAvatar(selectedUser.id, base64, actor);
-          reloadData();
-        };
-        reader.readAsDataURL(file);
-      }
-
+      storage.updateUserAvatar(selectedUser.id, await shrinkAvatar(file), actor);
       reloadData();
       showToast('프로필 사진이 변경되었습니다.', 'success');
     } catch (err) {

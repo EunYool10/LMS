@@ -763,7 +763,10 @@ async function startServer() {
     try {
       const u: any = userProfilesStore[userId] || (await withTimeout(getDoc(doc(fbDb, 'users', userId)), 'Actor lookup', 4000)).data();
       if (!u) return undefined;
-      return { name: u.name || u.email || userId, email: u.email || undefined, avatar: typeof u.avatar === 'string' ? u.avatar : undefined };
+      let avatar: string | undefined = typeof u.avatar === 'string' ? u.avatar : undefined;
+      // Photos once saved on the server's disk are gone after a redeploy; a dead link shows as a broken icon.
+      if (avatar?.startsWith('/api/uploads/avatars/') && !fs.existsSync(path.join(AVATARS_DIR, path.basename(avatar)))) avatar = undefined;
+      return { name: u.name || u.email || userId, email: u.email || undefined, avatar };
     } catch {
       return undefined;
     }

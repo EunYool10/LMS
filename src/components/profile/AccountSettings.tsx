@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../services/storage';
+import { shrinkAvatar } from '../../utils/avatarImage';
 import { Avatar } from '../common/Avatar';
 import { useToast } from '../../context/ToastContext';
 import { getRoleLabel, getRoleMetadata } from '../../utils/rbac';
@@ -98,13 +99,8 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onNavigateToCo
 
     setIsUploadingAvatar(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        await updateAvatar(base64);
-        setIsUploadingAvatar(false);
-      };
-      reader.readAsDataURL(file);
+      updateAvatar(await shrinkAvatar(file));
+      setIsUploadingAvatar(false);
     } catch {
       showToast('사진 처리 중 오류가 발생했습니다.', 'error');
       setIsUploadingAvatar(false);
