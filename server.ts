@@ -766,6 +766,13 @@ async function startServer() {
       let avatar: string | undefined = typeof u.avatar === 'string' ? u.avatar : undefined;
       // Photos once saved on the server's disk are gone after a redeploy; a dead link shows as a broken icon.
       if (avatar?.startsWith('/api/uploads/avatars/') && !fs.existsSync(path.join(AVATARS_DIR, path.basename(avatar)))) avatar = undefined;
+      // No photo of its own: borrow one from another sign-in with the same address (e.g. the Google account).
+      if (!avatar && u.email) {
+        const other = (await findAccountsByEmail(String(u.email).toLowerCase())).find(
+          (a) => typeof a.avatar === 'string' && /^(https:\/\/|data:image\/)/.test(a.avatar)
+        );
+        if (other) avatar = other.avatar;
+      }
       return { name: u.name || u.email || userId, email: u.email || undefined, avatar };
     } catch {
       return undefined;

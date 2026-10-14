@@ -83,12 +83,18 @@ function buildPayload(message: DiscordMessage) {
         : undefined;
   const actorLine = actor ? `${actor.name}${actor.email && actor.email !== actor.name ? ` · ${actor.email}` : ''}` : '';
 
+  // Someone without a photo still gets the LMS mark, so the photo slot is never an empty or broken icon.
+  const personPhoto = avatarUrl || (site ? `${site}/android-chrome-192x192.png?v=2` : undefined);
+  const body = [message.description ? clip(message.description, 1500, true) : '', message.note ? `> 💡 ${clip(message.note, 200)}` : '']
+    .filter(Boolean)
+    .join('\n\n');
+
   const main: Record<string, unknown> = {
     // With a person attached, the top line is who it is about and the category moves to the footer.
-    author: actor ? { name: clip(actorLine, 240), icon_url: avatarUrl } : { name: meta.author },
-    thumbnail: avatarUrl ? { url: avatarUrl } : undefined,
+    author: actor ? { name: clip(actorLine, 240), icon_url: personPhoto } : { name: meta.author },
+    thumbnail: actor && personPhoto ? { url: personPhoto } : undefined,
     title: clip(message.title, 240),
-    description: message.description ? clip(message.description, 1500, true) : undefined,
+    description: body || undefined,
     color: meta.color,
     url: site || undefined,
     fields: (message.fields || [])
@@ -97,8 +103,8 @@ function buildPayload(message: DiscordMessage) {
       .map((f) => ({ name: clip(f.name, 100), value: clip(f.value, 900, true) || '-', inline: f.inline ?? true })),
     image: images[0] ? { url: `attachment://${images[0].filename}` } : undefined,
     footer: {
-      text: `🏫 TDSNT LMS${actor ? ` · ${meta.author}` : ''}${message.note ? ` · ${clip(message.note, 120)}` : ''}`,
-      icon_url: site ? `${site}/favicon-32x32.png` : undefined,
+      text: `TDSNT LMS${actor ? ` · ${meta.author}` : ''}`,
+      icon_url: site ? `${site}/favicon-32x32.png?v=2` : undefined,
     },
     timestamp: new Date().toISOString(),
   };
@@ -109,7 +115,7 @@ function buildPayload(message: DiscordMessage) {
   return {
     payload: {
       username: 'TDSNT LMS 알림',
-      avatar_url: site ? `${site}/android-chrome-192x192.png` : undefined,
+      avatar_url: site ? `${site}/android-chrome-192x192.png?v=2` : undefined,
       allowed_mentions: { parse: [] as string[] }, // user-written text can never ping @everyone or roles
       embeds: [main, ...gallery],
     },
