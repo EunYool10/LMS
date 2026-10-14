@@ -9,15 +9,16 @@ import { getDiscordStatus, sendDiscordTest } from '../../services/discordNotify'
 import { defaultPolicy, formatKoreanDate, overrideToDocument, parsePolicyText, POLICY_LABELS, policyToText, PolicyType } from '../../services/policies';
 import { AdminPageHeader } from './AdminPageHeader';
 import { BaseModal } from '../common/BaseModal';
-import { AlertTriangle, Bell, Check, Copy, Database, Eye, EyeOff, FileText, KeyRound, Lock, LogIn, RotateCcw, Save, Send, Settings, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Bell, Check, Copy, Database, Eye, EyeOff, FileText, KeyRound, Lock, LogIn, Mail, RotateCcw, Save, Send, Settings, ShieldCheck } from 'lucide-react';
 
-type Section = 'general' | 'access' | 'policies' | 'notifications' | 'social' | 'admins' | 'data';
+type Section = 'general' | 'access' | 'policies' | 'notifications' | 'mail' | 'social' | 'admins' | 'data';
 
 const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'general', label: '일반', icon: Settings },
   { id: 'access', label: '접근 · 보안', icon: ShieldCheck },
   { id: 'policies', label: '약관 · 정책', icon: FileText },
   { id: 'notifications', label: '알림 (Discord)', icon: Bell },
+  { id: 'mail', label: '메일 발송 점검', icon: Mail },
   { id: 'social', label: '소셜 로그인', icon: LogIn },
   { id: 'admins', label: '관리자 계정', icon: KeyRound },
   { id: 'data', label: '데이터 관리', icon: Database },
@@ -94,6 +95,42 @@ export const SystemSettingsView: React.FC = () => {
     setDiscordConfigured(null);
     getDiscordStatus().then((s) => setDiscordConfigured(s ? s.configured : false));
   }, [section]);
+
+  type MailLogEntry = { at: string; to: string; type: 'reset' | 'test'; ok: boolean; note: string };
+  const [mailStatus, setMailStatus] = useState<{ transport: string | null; entries: MailLogEntry[] } | null>(null);
+  const [mailTestTo, setMailTestTo] = useState(user?.email || '');
+  const [isSendingMail, setIsSendingMail] = useState(false);
+
+  const loadMailStatus = () =>
+    fetch('/api/admin/mail/status')
+      .then((r) => r.json())
+      .then((d) => setMailStatus(d.success ? { transport: d.transport, entries: d.entries || [] } : { transport: null, entries: [] }))
+      .catch(() => setMailStatus({ transport: null, entries: [] }));
+
+  useEffect(() => {
+    if (section !== 'mail') return;
+    setMailStatus(null);
+    loadMailStatus();
+  }, [section]);
+
+  const handleMailTest = async () => {
+    setIsSendingMail(true);
+    try {
+      const res = await fetch('/api/admin/mail/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: mailTestTo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) showToast(`테스트 메일을 보냈습니다 (${((data.ms || 0) / 1000).toFixed(1)}초). 메일함을 확인해 주세요.`, 'success');
+      else showToast(data.message || '테스트 메일을 보내지 못했습니다.', 'error');
+    } catch {
+      showToast('서버에 연결하지 못했습니다.', 'error');
+    } finally {
+      setIsSendingMail(false);
+      loadMailStatus();
+    }
+  };
 
   const discordOn = (key: 'enrollment' | 'completion' | 'inquiry' | 'security') => settings.discordNotify?.[key] !== false;
   const setDiscordOn = (key: 'enrollment' | 'completion' | 'inquiry' | 'security', on: boolean) =>
@@ -611,6 +648,75 @@ export const SystemSettingsView: React.FC = () => {
                     {isChangingPw ? '변경 중…' : '비밀번호 변경'}
                   </button>
                 </form>
+              </div>
+            )}
+
+            {section === 'mail' && (
+              <div className="max-w-2xl space-y-6">
+                <div
+                  className={`rounded-lg border px-4 py-4 ${
+                    mailStatus?.transport ? 'border-emerald-200 bg-emerald-50/60' : mailStatus ? 'border-amber-200 bg-amber-50/60' : 'border-neutral-200'
+                  }`}
+                >
+                  <p className="flex items-center gap-2 text-sm font-medium text-neutral-900">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${mailStatus?.transport ? 'bg-emerald-500' : mailStatus ? 'bg-amber-500' : 'bg-neutral-300'}`}
+                    />
+                    {!mailStatus
+                      ? '메일 설정을 확인하는 중…'
+                      : mailStatus.transport
+                        ? `메일 발송이 설정되어 있습니다 (${mailStatus.transport === 'relay' ? 'Apps Script 중계' : 'Gmail SMTP'}).`
+                        : '메일 발송이 설정되지 않았습니다. Render 환경 변수 MAIL_RELAY_SECRET을 확인해 주세요.'}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="email"
+                      value={mailTestTo}
+                      onChange={(e) => setMailTestTo(e.target.value)}
+                      placeholder="받을 메일 주소"
+                      className="lms-input flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleMailTest}
+                      disabled={!mailStatus?.transport || isSendingMail || !mailTestTo.trim()}
+                      className="lms-btn lms-btn-secondary lms-btn-sm shrink-0"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      {isSendingMail ? '보내는 중…' : '테스트 메일 보내기'}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-neutral-500">
+                    비밀번호 찾기 메일과 같은 경로로 보냅니다. 보냈는데 받은편지함에 없으면 스팸함과 프로모션 탭을 확인해 주세요.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-medium text-neutral-900">최근 발송 기록</p>
+                    <button type="button" onClick={loadMailStatus} className="lms-btn lms-btn-secondary lms-btn-sm">
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      새로고침
+                    </button>
+                  </div>
+                  {mailStatus && mailStatus.entries.length === 0 ? (
+                    <p className="rounded-lg border border-neutral-200 px-4 py-6 text-center text-[13px] text-neutral-500">아직 기록이 없습니다.</p>
+                  ) : (
+                    <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+                      {(mailStatus?.entries || []).map((e, i) => (
+                        <li key={i} className="flex flex-col gap-0.5 px-4 py-2.5 text-[13px] sm:flex-row sm:items-center sm:gap-3">
+                          <span className="w-36 shrink-0 text-xs text-neutral-500">{new Date(e.at).toLocaleString('ko-KR')}</span>
+                          <span className="w-16 shrink-0 text-xs text-neutral-500">{e.type === 'reset' ? '비번 찾기' : '테스트'}</span>
+                          <span className="min-w-0 flex-1 truncate font-mono text-neutral-800">{e.to}</span>
+                          <span className={`text-xs font-medium ${e.ok ? 'text-emerald-600' : 'text-rose-600'}`}>{e.note}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-xs text-neutral-400">
+                    최근 50건까지 남습니다. 주소는 앞 두 글자만 보입니다. 기록이 아예 없으면 요청이 서버까지 오지 않은 것입니다.
+                  </p>
+                </div>
               </div>
             )}
 

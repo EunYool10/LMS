@@ -48,7 +48,7 @@ import {
   verifyPasswordResetToken,
   verifySessionToken,
 } from './authSecurity';
-import { isMailerConfigured, mailTransport, sendPasswordResetMail } from './resetMailer';
+import { isMailerConfigured, mailTransport, sendPasswordResetMail, sendTestMail } from './resetMailer';
 
 dotenv.config();
 
@@ -2173,6 +2173,69 @@ async function startServer() {
     return link.stamp === (await currentPasswordStamp(link.email)) ? { email: link.email } : null;
   }
 
+  // Recent mail attempts for the admin mail check. They sit in one public doc, so addresses are masked.
+  type MailLogEntry = { at: string; to: string; type: 'reset' | 'test'; ok: boolean; note: string };
+  const maskEmail = (email: string) => {
+    const [local, domain = ''] = email.split('@');
+    return `${local.slice(0, 2)}${'*'.repeat(Math.max(1, local.length - 2))}@${domain}`;
+  };
+  async function readMailLog(): Promise<MailLogEntry[]> {
+    const snap = await withTimeout(getDoc(doc(fbDb, 'system_settings', 'mail_log')), 'Mail log read');
+    return snap.exists() ? ((snap.data().entries as MailLogEntry[]) || []) : [];
+  }
+  // A failed log write never affects the mail itself.
+  async function logMail(type: MailLogEntry['type'], to: string, ok: boolean, note: string) {
+    try {
+      const entries = await readMailLog();
+      entries.unshift({ at: new Date().toISOString(), to: maskEmail(to), type, ok, note });
+      await withTimeout(setDoc(doc(fbDb, 'system_settings', 'mail_log'), { kind: 'mail_log', entries: entries.slice(0, 50) }), 'Mail log save');
+    } catch (e) {
+      console.warn('[Mail] Log save failed:', e);
+    }
+  }
+  const mailFailureHint = (message: string) =>
+    /forbidden/.test(message)
+      ? ' (Render의 MAIL_RELAY_SECRET이 Apps Script의 비밀값과 다릅니다)'
+      : /quota|too many times/i.test(message)
+        ? ' (오늘 Gmail 발송 한도를 넘었습니다)'
+        : /timeout|aborted/i.test(message)
+          ? ' (메일 중계 서버가 응답하지 않습니다)'
+          : '';
+
+  app.get('/api/admin/mail/status', async (req, res) => {
+    let entries: MailLogEntry[] = [];
+    try {
+      entries = await readMailLog();
+    } catch (e) {
+      console.warn('[Mail] Log read failed:', e);
+    }
+    res.json({ success: true, transport: mailTransport(), entries });
+  });
+
+  const mailTests = new WindowCounter(15 * 60 * 1000);
+  app.post('/api/admin/mail/test', async (req, res) => {
+    const to = String(req.body?.to || '').trim().toLowerCase();
+    if (!/^[^s@,;<>]+@[^s@,;<>]+.[^s@,;<>]+$/.test(to)) {
+      return res.status(400).json({ success: false, message: '받는 메일 주소를 확인해 주세요.' });
+    }
+    if (!isMailerConfigured()) {
+      return res.status(503).json({ success: false, message: '서버에 메일 설정(MAIL_RELAY_SECRET)이 없어 보낼 수 없습니다.' });
+    }
+    if (mailTests.hit(clientIp(req)) > 10) {
+      return res.status(429).json({ success: false, message: '테스트 메일은 15분에 10번까지 보낼 수 있습니다.' });
+    }
+    const started = Date.now();
+    try {
+      await sendTestMail(to, new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }));
+      void logMail('test', to, true, '발송 완료');
+      return res.json({ success: true, ms: Date.now() - started });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      void logMail('test', to, false, message + mailFailureHint(message));
+      return res.status(502).json({ success: false, message: `메일을 보내지 못했습니다: ${message}${mailFailureHint(message)}` });
+    }
+  });
+
   // Step 1: mail a reset link to an address that has a password account.
   app.post('/api/auth/password-reset/request', async (req, res) => {
     const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
@@ -2187,16 +2250,23 @@ async function startServer() {
     }
     try {
       const blocker = await passwordResetBlocker(cleanEmail);
-      if (blocker) return res.status(blocker.status).json({ success: false, message: blocker.message });
+      if (blocker) {
+        void logMail('reset', cleanEmail, false, blocker.message);
+        return res.status(blocker.status).json({ success: false, message: blocker.message });
+      }
       if (passwordResetMails.count(cleanEmail) >= 3) {
+        void logMail('reset', cleanEmail, false, '15분 안에 3번 넘게 요청해 차단');
         return res.status(429).json({ success: false, message: '이미 메일을 여러 번 보냈어요. 메일함(스팸함 포함)을 확인하거나 15분 뒤에 다시 시도해 주세요.' });
       }
       const token = issuePasswordResetToken(cleanEmail, await currentPasswordStamp(cleanEmail));
       const baseUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
       await sendPasswordResetMail(cleanEmail, `${baseUrl}/?pwreset=${encodeURIComponent(token)}`, PASSWORD_RESET_TTL_SECONDS / 60);
       passwordResetMails.hit(cleanEmail);
-    } catch (e) {
+      void logMail('reset', cleanEmail, true, '발송 완료');
+    } catch (e: any) {
       console.warn('[Auth] Password reset mail failed:', e);
+      const message = String(e?.message || e);
+      void logMail('reset', cleanEmail, false, message + mailFailureHint(message));
       return res.status(503).json({ success: false, message: '메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.' });
     }
     return res.json({ success: true });

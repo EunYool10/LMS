@@ -117,3 +117,20 @@ export async function sendPasswordResetMail(to: string, link: string, minutes: n
 
   await deliver({ to, subject: '[TDSNT LMS] 비밀번호 재설정 안내', text, html });
 }
+
+/** A plain mail sent from the admin mail check, through the same route as the reset mail. */
+export async function sendTestMail(to: string, sentAt: string): Promise<void> {
+  const text = [
+    'TDSNT LMS 메일 발송 점검용 테스트 메일입니다.',
+    `보낸 시각: ${sentAt}`,
+    '',
+    '이 메일이 보이면 비밀번호 찾기 메일도 같은 경로로 도착합니다.',
+    '',
+    'TDSNT LMS 관리팀',
+  ].join('\n');
+  const html = `<!doctype html><html lang="ko"><body style="font-family:'Pretendard','Malgun Gothic',sans-serif;color:#1f2937;font-size:14px;line-height:1.7">${text
+    .split('\n')
+    .map((l) => escapeHtml(l))
+    .join('<br>')}</body></html>`;
+  await deliver({ to, subject: '[TDSNT LMS] 메일 발송 점검', text, html });
+}
